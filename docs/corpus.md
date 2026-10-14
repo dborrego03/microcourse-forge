@@ -17,5 +17,6 @@ The book is not committed to this repo.
 3. Only chapters 6, 7 and 8 are ingested.
 
 Record the download date and file hash here once downloaded:
-- Retrieved at: TBD
-- SHA-256: TBD
+- Retrieved at: 2026-10-14
+- File: `data/raw/psychology-2e.pdf` (57,739,919 bytes)
+- SHA-256: 2F08113C78127BC684922AD6A819DB22BD4705CE9FCF28A07F36A2041B1474E2
