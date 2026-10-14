@@ -218,3 +218,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project
+node_modules/
+.terraform/
+*.tfstate*
+
+# Personal notes (private)
+CLAUDE.local.md
+docs/*.local.md
+
+# Source corpus (never committed, see docs/corpus.md)
+data/raw/*
+!data/raw/.gitkeep
