@@ -6,7 +6,6 @@ import pytest
 
 from forge.db import connect
 
-
 if sys.platform == "win32":
     # psycopg's async mode can't run on the Proactor loop Windows uses by default.
     def pytest_asyncio_loop_factories(config, item):

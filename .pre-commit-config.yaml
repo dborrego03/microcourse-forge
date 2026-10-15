@@ -1,0 +1,22 @@
+# Install once with: uvx pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: uv run --directory apps/api ruff check --fix .
+        language: system
+        files: ^apps/api/.*\.py$
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --directory apps/api ruff format .
+        language: system
+        files: ^apps/api/.*\.py$
+        pass_filenames: false
+      - id: web-lint
+        name: eslint + prettier
+        entry: bash -c "cd apps/web && npx prettier --write . >/dev/null && npm run lint --silent"
+        language: system
+        files: ^apps/web/
+        pass_filenames: false

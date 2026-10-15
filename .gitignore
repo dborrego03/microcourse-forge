@@ -232,3 +232,6 @@ docs/*.local.md
 # Source corpus (never committed, see docs/corpus.md)
 data/raw/*
 !data/raw/.gitkeep
+
+# Local editor/assistant settings
+.claude/
