@@ -83,9 +83,9 @@ async function LessonView({ id }: { id: string }) {
           </a>
         </p>
         {narrated.size === 0 && (
-          <span className="ml-4">
+          <div className="mt-1">
             <NarrateButton lessonId={data.id} />
-          </span>
+          </div>
         )}
       </header>
 
