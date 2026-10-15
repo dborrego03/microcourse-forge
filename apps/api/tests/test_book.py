@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from forge.ingest import DEFAULT_PDF, Chapter, clean_page, load_sections, read_chapters, split_sections
+from forge.book import DEFAULT_PDF, Chapter, clean_page, load_sections, read_chapters, split_sections
 
 
 def test_clean_page_drops_footers_and_attribution():
