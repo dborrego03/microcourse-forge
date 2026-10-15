@@ -2,7 +2,7 @@ import io
 import xml.etree.ElementTree as ET
 import zipfile
 
-from forge.cmi5 import build_cmi5
+from forge.cmi5 import build_cmi5, build_cmi5_course
 from tests.test_scorm import LESSON
 
 NS = {"c": "https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd"}
@@ -28,3 +28,18 @@ def test_page_uses_the_xapi_runtime_not_scorm():
     html = zipfile.ZipFile(io.BytesIO(build_cmi5(LESSON))).read("index.html").decode()
     assert "LMS.LaunchData" in html
     assert "LMSInitialize" not in html
+
+
+def test_a_course_gets_one_au_per_lesson(tmp_path):
+    second = {**LESSON, "id": 8}
+    zf = zipfile.ZipFile(
+        io.BytesIO(build_cmi5_course("Memory basics", "Two lessons", [LESSON, second], tmp_path))
+    )
+
+    assert {"cmi5.xml", "LICENSE.txt", "lesson-7/index.html", "lesson-8/index.html"} == set(zf.namelist())
+    structure = ET.fromstring(zf.read("cmi5.xml"))
+    assert structure.find("c:course", NS).get("id").endswith("/courses/7-8")
+    assert [a.find("c:url", NS).text for a in structure.findall("c:au", NS)] == [
+        "lesson-7/index.html",
+        "lesson-8/index.html",
+    ]

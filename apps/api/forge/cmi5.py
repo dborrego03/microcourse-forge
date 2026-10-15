@@ -11,20 +11,22 @@ from pathlib import Path
 
 from forge.scorm import MASTERY_SCORE, audio_files, license_text, render_html, zip_files
 
-COURSE_IRI = "https://github.com/dborrego03/microcourse-forge/lessons/{id}"
+IRI = "https://github.com/dborrego03/microcourse-forge"
 
 COURSE_STRUCTURE = """<?xml version="1.0" encoding="utf-8"?>
 <courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd">
-  <course id="{course}">
+  <course id="{id}">
     <title><langstring lang="en-US">{title}</langstring></title>
     <description><langstring lang="en-US">{description}</langstring></description>
   </course>
-  <au id="{course}/au" moveOn="CompletedAndPassed" masteryScore="{mastery}" launchMethod="AnyWindow">
+{aus}</courseStructure>
+"""
+
+AU = """  <au id="{id}" moveOn="CompletedAndPassed" masteryScore="{mastery}" launchMethod="AnyWindow">
     <title><langstring lang="en-US">{title}</langstring></title>
     <description><langstring lang="en-US">{description}</langstring></description>
-    <url>index.html</url>
+    <url>{url}</url>
   </au>
-</courseStructure>
 """
 
 CMI5_JS = """
@@ -127,14 +129,25 @@ window.addEventListener("pagehide", function () {
 """
 
 
-def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
-    """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
-    audio = audio_files(lesson, media_dir)
-    structure = COURSE_STRUCTURE.format(
-        course=COURSE_IRI.format(id=lesson["id"]),
+def au(au_id: str, lesson: dict, url: str) -> str:
+    return AU.format(
+        id=au_id,
         title=escape(lesson["lesson"]["title"]),
         description=escape(lesson["lesson"]["summary"]),
         mastery=MASTERY_SCORE / 100,
+        url=url,
+    )
+
+
+def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
+    """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
+    course_id = f"{IRI}/lessons/{lesson['id']}"
+    audio = audio_files(lesson, media_dir)
+    structure = COURSE_STRUCTURE.format(
+        id=course_id,
+        title=escape(lesson["lesson"]["title"]),
+        description=escape(lesson["lesson"]["summary"]),
+        aus=au(f"{course_id}/au", lesson, "index.html"),
     )
     return zip_files(
         {
@@ -144,3 +157,20 @@ def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
             **audio,
         }
     )
+
+
+def build_cmi5_course(title: str, description: str, lessons: list[dict], media_root: Path) -> bytes:
+    """Several lessons as one cmi5 course, one AU per lesson in its own folder."""
+    course_id = f"{IRI}/courses/" + "-".join(str(lesson["id"]) for lesson in lessons)
+    files: dict[str, str | bytes] = {"LICENSE.txt": license_text(lessons[0])}
+    aus = []
+    for lesson in lessons:
+        folder = f"lesson-{lesson['id']}"
+        audio = audio_files(lesson, media_root / folder)
+        files[f"{folder}/index.html"] = render_html(lesson, narrated=bool(audio), runtime=CMI5_JS)
+        files.update({f"{folder}/{name}": data for name, data in audio.items()})
+        aus.append(au(f"{IRI}/lessons/{lesson['id']}/au", lesson, f"{folder}/index.html"))
+    structure = COURSE_STRUCTURE.format(
+        id=course_id, title=escape(title), description=escape(description), aus="".join(aus)
+    )
+    return zip_files({"cmi5.xml": structure, **files})
