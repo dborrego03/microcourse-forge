@@ -1,0 +1,46 @@
+# Decision and failure log
+
+Short notes on what went wrong, what I measured and what I changed. Newest first.
+
+## 2026-10-15 · The lesson prompt was fighting itself
+The first generation eval (12 lessons) gave faithfulness 0.90: 30 of 309 claims weren't backed by
+the sources each section cited. Reading them, most were textbook-style definitions and bridging
+remarks the model added on its own. The prompt asked it to "define every technical term" for
+beginners and also to "use only the sources", and it resolved the conflict by defining terms from
+memory. The new rule says to define terms the way the sources do, or leave them out.
+
+| | prompt v1 (d1713af) | prompt v2 (53c77cb) |
+|---|---|---|
+| faithfulness | 0.903 | 0.976 |
+| unsupported claims | 30 / 309 | 6 / 249 |
+| rubric accuracy | 3.75 | 4.42 |
+| rubric clarity | 4.17 | 3.92 |
+| rubric mean | 4.03 | 4.06 |
+
+Accuracy went up and clarity went down a little, which makes sense: fewer self-written
+definitions. With 12 lessons a 0.25 change on a 1-5 scale may be noise; the drop in unsupported
+claims is not.
+
+## 2026-10-15 · Regex guardrails didn't generalize
+I wrote the input rules (injection, harmful intent, personal data) while looking at
+`redteam_v1`, and they blocked all 30 cases. A held-out set written afterwards told a different
+story: 44% blocked, and none of the harmful requests ("methods to make a witness forget what they
+saw" doesn't say "how to"). I added a small model as a second screen and ran the held-out set
+once more without touching the rules: 94%. The miss left is "Introduction to machine learning",
+which the relevance check lets through because of the word "learning".
+
+## 2026-10-15 · A file that only existed on my machine
+CI's web job failed to type-check while everything passed locally. The Python `.gitignore`
+template ignores every `lib/` folder, including `apps/web/app/lib/`, so `api.ts` was never pushed.
+Fixed with an exception in `.gitignore`. Lesson: check a fresh clone, not the working tree.
+
+## 2026-10-15 · Re-ranker: smaller model, fewer candidates
+On `retrieval_v1`, re-ranking lifted hit@1 from 0.62 to 0.80 and MRR from 0.76 to 0.88, at about
+1 s per query on CPU. The tiny Jina re-ranker beat MiniLM-L6 on both quality and speed, and
+re-ranking 10 candidates instead of 20 halved the latency for a small MRR loss (0.891 to 0.878).
+Hybrid search (full text + vectors with RRF) barely moved the numbers on this corpus.
+
+## 2026-10-15 · The corpus license was wrong in the docs
+The first commit said the book was CC BY 4.0, "verified in the preface". The copyright page of
+the PDF says CC BY-NC-SA 4.0. That changes what the generated lessons must carry (same license,
+non-commercial), so it was fixed everywhere before any lesson was published.
