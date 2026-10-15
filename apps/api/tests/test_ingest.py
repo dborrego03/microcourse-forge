@@ -47,19 +47,28 @@ def make_chapter():
 
 def test_split_sections_skips_outline_and_end_matter():
     pages = [
-        (10, [
-            "INTRODUCTION", "CHAPTER OUTLINE", "6.1 What Is Learning?", "6.2 Classical Conditioning",
-            "Turtles know how to swim.",
-            "6.1 What Is Learning?", "LEARNING OBJECTIVES", "Define learning",
-            "6 Learning",
-        ]),
+        (
+            10,
+            [
+                "INTRODUCTION",
+                "CHAPTER OUTLINE",
+                "6.1 What Is Learning?",
+                "6.2 Classical Conditioning",
+                "Turtles know how to swim.",
+                "6.1 What Is Learning?",
+                "LEARNING OBJECTIVES",
+                "Define learning",
+                "6 Learning",
+            ],
+        ),
         (11, ["Reflexes are innate.", "6.2 Classical Conditioning", "LEARNING OBJECTIVES", "Pavlov's dogs."]),
         (12, ["More on dogs.", "Key Terms", "reflex unlearned response"]),
     ]
 
     sections = split_sections(make_chapter(), pages)
 
-    assert [s.title for s in sections] == ["Introduction", "6.1 What Is Learning?", "6.2 Classical Conditioning"]
+    titles = [s.title for s in sections]
+    assert titles == ["Introduction", "6.1 What Is Learning?", "6.2 Classical Conditioning"]
     assert sections[0].text == "Turtles know how to swim."
     assert sections[1].text == "LEARNING OBJECTIVES\nDefine learning\nReflexes are innate."
     assert (sections[1].pdf_page_start, sections[1].pdf_page_end) == (10, 11)

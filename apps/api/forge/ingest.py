@@ -4,6 +4,7 @@ import hashlib
 import re
 import sys
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -65,7 +66,7 @@ def read_chapters(reader: PdfReader) -> list[Chapter]:
             entries.append((item.title.strip(), reader.get_destination_page_number(item) + 1, []))
 
     chapters = []
-    for (title, page, children), next_entry in zip(entries, entries[1:]):
+    for (title, page, children), next_entry in pairwise(entries):
         match = CHAPTER_ENTRY.fullmatch(title)
         if match and int(match[1]) in CHAPTERS:
             sections = [c.title.strip() for c in children if SECTION_ENTRY.fullmatch(c.title.strip())]
@@ -85,7 +86,8 @@ def split_sections(chapter: Chapter, pages: list[tuple[int, list[str]]]) -> list
     # Section titles also show up in the chapter outline on the first page,
     # so a real heading is the one followed by its learning objectives.
     starts = [
-        i for i in range(len(lines) - 1)
+        i
+        for i in range(len(lines) - 1)
         if lines[i][1] in chapter.sections and lines[i + 1][1] == "LEARNING OBJECTIVES"
     ]
     found = [lines[i][1] for i in starts]
@@ -97,10 +99,10 @@ def split_sections(chapter: Chapter, pages: list[tuple[int, list[str]]]) -> list
         raise ValueError(f"chapter {chapter.number}: no 'Key Terms' after the last section") from None
 
     skip = {"INTRODUCTION", "CHAPTER OUTLINE", *chapter.sections}
-    intro = [(page, line) for page, line in lines[:starts[0]] if line not in skip]
+    intro = [(page, line) for page, line in lines[: starts[0]] if line not in skip]
     blocks = [("Introduction", intro)]
-    for start, stop in zip(starts, starts[1:] + [end]):
-        blocks.append((lines[start][1], lines[start + 1:stop]))
+    for start, stop in zip(starts, starts[1:] + [end], strict=True):
+        blocks.append((lines[start][1], lines[start + 1 : stop]))
 
     return [
         Section(
