@@ -10,7 +10,6 @@ import argparse
 import json
 import re
 import statistics
-import subprocess
 import sys
 import time
 import tomllib
@@ -20,17 +19,9 @@ from psycopg.types.json import Jsonb
 
 from forge.db import connect, run
 from forge.search import SEARCH_MODES
+from forge.version import git_sha
 
 EVALS_DIR = Path(__file__).resolve().parents[3] / "evals"
-
-
-def git_sha() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "describe", "--always", "--dirty", "--abbrev=7"], text=True
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
 
 
 def normalize(text: str) -> str:
