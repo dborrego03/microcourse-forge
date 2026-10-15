@@ -1,0 +1,66 @@
+name: Nightly evals
+
+# The full set: retrieval (no model calls), guardrails and generation (both call Claude).
+# The model calls run through the Claude Code CLI with a token from `claude setup-token`,
+# stored as the CLAUDE_CODE_OAUTH_TOKEN secret. Without it only retrieval runs.
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FORGE_LLM_CACHE: "off"
+    services:
+      db:
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge_dev_password
+          POSTGRES_DB: microcourse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forge -d microcourse"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: apps/api/.cache/fastembed
+          key: fastembed-bge-small-en-v1.5
+      - run: uv sync --locked
+      - run: uv run alembic upgrade head
+      - run: uv run python -m forge.ingest --url https://assets.openstax.org/oscms-prodcms/media/documents/Psychology2e_WEB.pdf
+
+      - run: uv run python -m forge.evals retrieval --mode rerank --check
+
+      - uses: actions/setup-node@v7
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        with:
+          node-version: 24
+      - if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: npm install -g @anthropic-ai/claude-code
+      - if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: uv run python -m forge.evals guardrails --dataset redteam_v1 --check
+      - if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: uv run python -m forge.evals guardrails --dataset redteam_holdout
+      - if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        run: uv run python -m forge.evals generation --check
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/
