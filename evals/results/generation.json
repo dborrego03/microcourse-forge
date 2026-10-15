@@ -1,0 +1,430 @@
+{
+  "kind": "generation",
+  "dataset": "generation_v1",
+  "cases": 12,
+  "config": {
+    "generator": "claude-haiku-5-5",
+    "judge": "claude-sonnet-5-5"
+  },
+  "metrics": {
+    "valid_rate": 1.0,
+    "valid_first_try_rate": 1.0,
+    "faithfulness": 0.903,
+    "relevance": 4.833,
+    "rubric_alignment": 4.5,
+    "rubric_accuracy": 3.75,
+    "rubric_clarity": 4.167,
+    "rubric_examples": 3.833,
+    "rubric_assessment": 3.917,
+    "rubric_structure": 4,
+    "rubric_mean": 4.028,
+    "cost_per_lesson_usd": 0.0058,
+    "lesson_latency_p50_ms": 45429.5,
+    "lesson_latency_p95_ms": 57233.0,
+    "fresh_lessons": 12
+  },
+  "git_sha": "d1713af",
+  "lessons": [
+    {
+      "id": "g01",
+      "lesson_id": 5,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.005868,
+      "latency_ms": 56295,
+      "claims": 20,
+      "supported": 19,
+      "unsupported": [
+        "The more consistently the two stimuli are paired, the more the neutral stimulus takes on the power to trigger the response."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 4,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson explains how a neutral stimulus becomes a conditioned stimulus through pairing, and it also covers timing and real-world identification.",
+        "alignment": "Section 1 sets up the stimuli, section 2 covers pairing and timing, section 3 covers acquisition, and section 4 covers identification, so each section serves a stated objective.",
+        "accuracy": "Nearly everything is backed by the cited sources, but the claim about consistency of pairing in section 2 is not stated in its cited sources.",
+        "clarity": "The lesson is clear and beginner-friendly, and it defines terms as it introduces them. Its wording on UCS, NS and the taste-aversion interval is a little dense.",
+        "examples": "It uses Pavlov's dogs, an ice cream truck and Moisha's chemotherapy, which are concrete and varied. Sections 1 and 2 have no separate example field.",
+        "assessment": "Every question maps to an objective and the feedback explains the answer. The distractors in the timing question are implausible, and objective 3 gets two questions while objective 2 gets one.",
+        "structure": "The four sections progress logically from stimuli to pairing to acquisition to application with clear headings and a summary, although the body paragraphs are fairly dense."
+      }
+    },
+    {
+      "id": "g02",
+      "lesson_id": 6,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.005603,
+      "latency_ms": 53615,
+      "claims": 23,
+      "supported": 18,
+      "unsupported": [
+        "An unconditioned stimulus is something that naturally produces a response (the taste of chocolate ice cream is the example).",
+        "An unconditioned response is the response produced without training, such as mouth watering.",
+        "A neutral stimulus is something that does not trigger the response on its own, such as an ice cream truck's jingle.",
+        "The need to distinguish stimuli is why extinction and spontaneous recovery matter.",
+        "This pattern explains why a habit you thought was gone can reappear."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 3,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The request listed no objectives, and the lesson covers extinction and spontaneous recovery at beginner level with its own three clear objectives.",
+        "alignment": "Sections 2 and 3 map directly to the objectives, but section 1 is background and section 4 drifts into discrimination, which the objectives don't cover.",
+        "accuracy": "Extinction and recovery content is faithful, but the UCS, UCR and neutral stimulus definitions are not in the cited sources, and section 4 wrongly ties stimulus discrimination to extinction and extends the claim to habits.",
+        "clarity": "The language is plain and terms are defined as they appear, though section 1 packs many terms into one dense paragraph.",
+        "examples": "It uses Pavlov's dogs, the ice cream truck and Tiger's can opener, which are concrete and varied, but they are embedded in the body text and the example fields are null.",
+        "assessment": "Each question maps to an objective and the feedback explains the answers, but objective 1 has only one question, the true/false item is easy, and the short-answer question has no rubric beyond a sample.",
+        "structure": "Four headed sections build logically from acquisition to extinction to recovery, but section 1 is a long block and there is no closing recap beyond the summary field."
+      }
+    },
+    {
+      "id": "g03",
+      "lesson_id": 7,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.006626,
+      "latency_ms": 46788,
+      "claims": 27,
+      "supported": 25,
+      "unsupported": [
+        "A long dry spell does not signal that the behavior has stopped paying because the learner has learned a reward can arrive after any number of responses.",
+        "Brain chemistry may explain why some people are vulnerable to problem gambling."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 3,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 3,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers fixed vs variable comparison, all four schedule examples, and why gambling resists extinction.",
+        "alignment": "Sections 1-4 map clearly to the objectives; section 5 is an enrichment that only loosely serves objective 3.",
+        "accuracy": "Most claims are sourced, but the 'any number of responses' mechanism and 'vulnerable people' claim are unsupported, and the summary overgeneralizes that fixed schedules extinguish quickly when the source only says this of fixed interval (others 'may').",
+        "clarity": "Terms are defined on introduction and the level fits, though the fixed vs variable extinction comparison is blurry beyond fixed interval vs variable ratio.",
+        "examples": "Concrete examples (June, Carla, Manuel, Sarah) cover all four schedules, though they are mostly textbook ones and variable ratio has only the gambling case.",
+        "assessment": "Questions map to objectives with plausible distractors and feedback, but Q1 overgeneralizes fixed vs variable, Q2 feedback adds unsourced detail about responding increasing, and objective 3 has only one item.",
+        "structure": "Headings progress logically from definitions to schedules to gambling to research, with a summary, though section 3 is dense."
+      }
+    },
+    {
+      "id": "g04",
+      "lesson_id": 8,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.005374,
+      "latency_ms": 49904,
+      "claims": 23,
+      "supported": 21,
+      "unsupported": [
+        "A stimulus is anything that can trigger a response.",
+        "The removed item or activity is what makes the consequence work, so the removal actually changes the child's behavior."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 4,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers positive and negative punishment thoroughly, including identification and the drawbacks of physical punishment; the request listed no objectives, so the lesson's own objectives are reasonable.",
+        "alignment": "Section 1 and the two punishment sections serve objectives 1 and 2, and the drawbacks section serves objective 3.",
+        "accuracy": "Nearly all claims are backed by the cited sources, but the definition of 'stimulus' and the claim that the removed item is what makes the consequence work are not in them.",
+        "clarity": "The language suits beginners and the add/remove and increase/decrease vocabulary is defined up front, though 'stimulus' gets an uncited definition.",
+        "examples": "Concrete, source-based examples (texting scold, writing lines, toy, time-out with Sophia, spanking imitation) cover both types, though there are few contrasting non-examples.",
+        "assessment": "Every question maps to an objective and the feedback explains why, but objective 1 has only one question and some distractors are weak (e.g. 'removes the need to explain rules').",
+        "structure": "Four clearly headed sections progress from vocabulary to each type to drawbacks, and there is a summary, but the paragraphs are dense and the lesson has no closing recap of how to tell the types apart."
+      }
+    },
+    {
+      "id": "g05",
+      "lesson_id": 9,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.00676,
+      "latency_ms": 50533,
+      "claims": 25,
+      "supported": 23,
+      "unsupported": [
+        "External reinforcement is a consequence that makes a behavior more likely to happen again.",
+        "Vicarious means experienced through watching someone else rather than through your own experience."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 4,
+        "clarity": 5,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers the requested four steps of modeling plus observational learning and the Bobo doll study named in the topic.",
+        "alignment": "Every section maps to an explicit objective, with the Bobo doll section illustrating vicarious reinforcement and punishment.",
+        "accuracy": "Nearly everything is source-backed, but the definitions of reinforcement and 'vicarious' are not in the cited sources.",
+        "clarity": "The language suits beginners, and terms such as imitation, models, and prosocial/antisocial are defined when introduced.",
+        "examples": "Examples are concrete and varied (coworker, Julian, Allison, Bobo doll), though the Julian example doesn't illustrate all four steps.",
+        "assessment": "Questions map to objectives and feedback explains the answers, but some distractors in the imitation question are implausible and no question covers the Bobo doll's prosocial/antisocial conclusion.",
+        "structure": "Four short, well-headed sections progress logically, but the lesson has no closing recap of the steps beyond the summary."
+      }
+    },
+    {
+      "id": "g06",
+      "lesson_id": 10,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.00533,
+      "latency_ms": 44261,
+      "claims": 24,
+      "supported": 23,
+      "unsupported": [
+        "You then step in and carry out the rest of the familiar sequence."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 4,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers concepts, prototypes, natural vs artificial concepts and schemata, matching the topic and the source section's own objectives (the request listed none).",
+        "alignment": "Sections 1\u20133 map directly to the three objectives, but the event schema section serves no explicit objective and 'constructed' is thinly covered.",
+        "accuracy": "Nearly every claim is backed by the cited sources, with minor flaws: a dangling 'These problems' reference and a vague 'rest of the familiar sequence' that the source doesn't state.",
+        "clarity": "The language is clear and terms are defined on introduction, though the schema paragraph's 'These problems' lacks an antecedent and the lesson doesn't distinguish schema from concept sharply.",
+        "examples": "Concrete examples (Golden Retriever, Essex Junction snow, square, firefighter, elevator) are relevant, but there is no example of a natural concept beyond snow or of how a schema is built.",
+        "assessment": "Each question maps to an objective with plausible distractors and explanatory feedback, but none tests event schemata and objective 3 is assessed only through the role-schema example.",
+        "structure": "Four short, headed sections progress logically from concepts to schemata with a summary, though the final section ends on filler advice and there's no closing recap."
+      }
+    },
+    {
+      "id": "g07",
+      "lesson_id": 11,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.004871,
+      "latency_ms": 33022,
+      "claims": 32,
+      "supported": 29,
+      "unsupported": [
+        "Phonemes are the basic speech sounds.",
+        "Children stay in the one-word stage for a few months.",
+        "Reinforcement means speech is strengthened by rewards."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 4,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The request lists no objectives, and the lesson covers the topic well: stages, biological basis and critical period, and overgeneralization.",
+        "alignment": "Sections 2, 3 and 4 map directly to the three stated objectives; section 1 on prenatal learning and babbling only loosely supports the stages objective.",
+        "accuracy": "Nearly all claims match the sources, but the phoneme definition, the gloss of reinforcement as rewards, and the 'few months' one-word stage are not in the cited sources.",
+        "clarity": "The language suits beginners and key terms are defined, but section 4's 'may say things that reveal the rule' is vague and there is a typo ('a impressive').",
+        "examples": "The lesson gives concrete, varied examples (cookie, Genie, gooses/mouses), though section 1 has none.",
+        "assessment": "Questions map to objectives and feedback explains the answers, but objective 2 gets one question and the critical period is not tested; some distractors are weak ('two dogs for two dogs') and the true/false item is easy to guess.",
+        "structure": "Four clear headed sections move logically from early development to theory to errors and the summary is concise, though section 1 is a dense block."
+      }
+    },
+    {
+      "id": "g08",
+      "lesson_id": 12,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.005043,
+      "latency_ms": 40872,
+      "claims": 22,
+      "supported": 18,
+      "unsupported": [
+        "Knowing these triggers helps you notice when a shortcut is shaping your decision.",
+        "Picking the first lunch option seen is a shortcut triggered by limited time and low importance.",
+        "The belief is strengthened because only supporting evidence gets noticed, not because evidence is balanced.",
+        "Recognizing this pattern is a first step toward considering all the evidence."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 4,
+        "clarity": 5,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers algorithm vs. heuristic and gives a confirmation bias example, so both requested objectives are met.",
+        "alignment": "Sections 2 to 4 map directly to the objectives, but section 1 is background that serves none of them explicitly.",
+        "accuracy": "Nearly all claims follow the cited sources. The unsupported items are a few inferences, such as how belief is strengthened and the benefit of knowing triggers, plus the self-made lunch example.",
+        "clarity": "The language suits beginners, and each term is defined when it is introduced.",
+        "examples": "The printer, software video, lunch and professor examples are concrete, though the confirmation bias example repeats the source and the lunch example is invented.",
+        "assessment": "Every question maps to an objective and the feedback explains the answer. Coverage is uneven, with only one question on objective 3, and the distractors are somewhat easy.",
+        "structure": "The four headed sections move logically from strategies to algorithms and heuristics, then triggers, then bias, but the lesson has no closing recap beyond the summary field."
+      }
+    },
+    {
+      "id": "g09",
+      "lesson_id": 13,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.007121,
+      "latency_ms": 45839,
+      "claims": 25,
+      "supported": 25,
+      "unsupported": [],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 5,
+        "clarity": 4,
+        "examples": 3,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The request gave a topic and no objectives; the lesson covers theories of intelligence thoroughly, including the single-factor, distinct-abilities, triarchic, hierarchical and emotional intelligence views.",
+        "alignment": "Each of the four sections maps directly to one of the four stated objectives.",
+        "accuracy": "Every claim is stated in the cited sources, and the lesson keeps hedges such as 'appears to be' and 'argues'.",
+        "clarity": "The prose is clear and defines terms such as g, crystallized and fluid intelligence, and the lesson is pitched well for intermediate learners, though Gardner's eight intelligences are never named.",
+        "examples": "The examples in sections 1 and 2 are concrete and relevant, but sections 3 and 4 have none, and the analytical and practical parts have no examples.",
+        "assessment": "All questions map to objectives and the feedback explains why, but objectives 2, 3 and 4 get only one question each, and none asks learners to contrast single-factor with multiple-intelligence theories.",
+        "structure": "Short headed sections run in a logical order and there is an overview summary, but the lesson has no closing recap or comparison table for the theories."
+      }
+    },
+    {
+      "id": "g10",
+      "lesson_id": 14,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.006376,
+      "latency_ms": 44375,
+      "claims": 37,
+      "supported": 35,
+      "unsupported": [
+        "Semantic memory covers facts such as the capital of the United States.",
+        "The contrast explains why studying involves repetition and connecting new ideas to old ones."
+      ],
+      "relevance": 5,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 4,
+        "clarity": 4,
+        "examples": 3,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson covers the STM vs LTM difference, the sensory-to-STM-to-LTM flow, and an explicit/episodic example, so every objective is addressed.",
+        "alignment": "Sections 1, 2 and 5 serve objective 1, section 3 serves objective 2, and section 4 serves objective 3.",
+        "accuracy": "Nearly everything is backed by the sources, but the semantic-memory definition and the study-habits inference are not stated in the cited text.",
+        "clarity": "The lesson is clear and at beginner level with terms defined, though some stumbles remain, such as 'working memory files' appearing without context.",
+        "examples": "The examples are concrete (computer analogy, peanut butter and jelly, alphabet song, birthday), but they come straight from the text, and the computer example is repeated in sections 1 and 5.",
+        "assessment": "Each question maps to an objective and has plausible distractors and explanatory feedback, but objective 2 gets three questions and only one is about the full flow, and the quiz has no items on the capacity of LTM versus STM beyond question 1.",
+        "structure": "Five clearly headed sections move logically from STM to LTM to transfer to explicit memory and then a comparison, but the long paragraphs are dense for beginners."
+      }
+    },
+    {
+      "id": "g11",
+      "lesson_id": 15,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.004453,
+      "latency_ms": 29639,
+      "claims": 27,
+      "supported": 24,
+      "unsupported": [
+        "Episodic memories are memories of personal experiences.",
+        "Procedural memories are a type of implicit memory, which operates outside conscious recall.",
+        "Reconstruction errors can result in a false memory."
+      ],
+      "relevance": 4,
+      "rubric": {
+        "alignment": 5,
+        "accuracy": 3,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The request gave no objectives, and the lesson covers amnesia types, Schacter's seven sins, encoding failure and false memories, though it treats other memory errors only briefly.",
+        "alignment": "Each section maps clearly to one of the three stated objectives.",
+        "accuracy": "Most claims are well supported, but the episodic memory definition, the procedural/implicit definition, and the explicit link from reconstruction errors to false memories are not in the cited sources.",
+        "clarity": "The writing is clear and well suited to an intermediate learner, though episodic, procedural and implicit are introduced with thin or unsourced definitions.",
+        "examples": "The H. M. case, the car accident and the penny are concrete, but the examples for the sins are thin (only one is given for misattribution).",
+        "assessment": "Every question maps to an objective and the feedback explains the answer, but nothing asks learners to compare and contrast the amnesias and some distractors (procedural or semantic amnesia) are weak.",
+        "structure": "Four focused sections with headings follow a logical progression, but there is no closing recap and the section 2 paragraph is dense."
+      }
+    },
+    {
+      "id": "g12",
+      "lesson_id": 16,
+      "status": "ready",
+      "retries": 0,
+      "cached": false,
+      "cost_usd": 0.00615,
+      "latency_ms": 45020,
+      "claims": 24,
+      "supported": 19,
+      "unsupported": [
+        "The capacity limit is one reason strategies that organize information are useful.",
+        "The three strategies support the consolidation process.",
+        "Saying words aloud is a technique related to rehearsal.",
+        "Because working memory holds only about 4 items, grouping information into meaningful pieces makes it easier to hold and recall.",
+        "Chunking works for other kinds of information."
+      ],
+      "relevance": 4,
+      "rubric": {
+        "alignment": 4,
+        "accuracy": 3,
+        "clarity": 4,
+        "examples": 4,
+        "assessment": 4,
+        "structure": 4
+      },
+      "reasons": {
+        "relevance": "The lesson names and covers three strategies with examples, but the objective of explaining why organizing information helps move it into long-term memory is only weakly supported.",
+        "alignment": "Each strategy section serves the objectives, but the intro section's consolidation material does not serve any objective directly.",
+        "accuracy": "Most claims are sourced, but the lesson adds unsupported links (capacity limit as the reason for chunking, strategies aiding consolidation, aloud-speech as a form of rehearsal) and calls the strategies evidence-based without sourced evidence for rehearsal or chunking.",
+        "clarity": "The language suits beginners and defines the key terms, though it switches between short-term and working memory without comment.",
+        "examples": "The examples are concrete and varied (multiplication facts, phone number, hippocampus image), but the chunking example is a phone number rather than a study task.",
+        "assessment": "Each question maps to an objective and has an explanatory feedback, with plausible distractors, but the true/false item is weak and the consolidation distractor is only loosely tied to the lesson.",
+        "structure": "The lesson has clear headings, one section per strategy and a summary, though the intro is dense with consolidation detail."
+      }
+    }
+  ]
+}

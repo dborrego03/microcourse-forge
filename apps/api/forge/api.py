@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 
 from forge.db import connect
+from forge.guardrails import Blocked
 from forge.lessons import GenerationError, LessonRequest, create_lesson, get_lesson
 from forge.llm import LLMError
 from forge.search import SEARCH_MODES
@@ -31,6 +32,8 @@ async def new_lesson(request: LessonRequest):
     async with await connect() as conn:
         try:
             return await create_lesson(conn, request)
+        except Blocked as e:
+            raise HTTPException(422, {"rule": e.rule, "message": str(e)}) from e
         except GenerationError as e:
             raise HTTPException(502, f"the model's answer didn't pass validation: {e}") from e
         except LLMError as e:

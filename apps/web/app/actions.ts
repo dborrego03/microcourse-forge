@@ -24,7 +24,10 @@ export async function createLesson(_prev: FormState, form: FormData): Promise<Fo
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    const detail = typeof body?.detail === "string" ? body.detail : `the API answered ${res.status}`;
+    const detail =
+      typeof body?.detail === "string"
+        ? body.detail
+        : (body?.detail?.message ?? `the API answered ${res.status}`);
     return { error: `Couldn't create the lesson: ${detail}` };
   }
   const lesson = await res.json();

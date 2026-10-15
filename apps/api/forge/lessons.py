@@ -13,6 +13,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from forge.guardrails import check_scope, check_text, moderate
 from forge.llm import LLMResult, complete_json
 from forge.search import rerank_search
 from forge.version import git_sha
@@ -164,17 +165,22 @@ async def log_run(conn, lesson_id, step, started, result=None, retries=0, error=
 
 
 async def create_lesson(conn: psycopg.AsyncConnection, request: LessonRequest) -> dict:
+    # Guardrails run before anything is stored, so a blocked request (which may
+    # contain personal data) never reaches the database or the model.
+    check_text(request.topic, *request.objectives)
+    started = time.perf_counter()
+    chunks = await rerank_search(conn, " ".join([request.topic, *request.objectives]), SOURCES_PER_LESSON)
+    check_scope(chunks[0]["score"] if chunks else float("-inf"))
+    await asyncio.to_thread(moderate, request.topic, request.objectives)
+
     cur = await conn.execute(
         "INSERT INTO lessons (request, status) VALUES (%s, 'running') RETURNING id",
         [Jsonb(request.model_dump())],
     )
     lesson_id = (await cur.fetchone())["id"]
+    await log_run(conn, lesson_id, "retrieve", started)
     await conn.commit()
-    step, started = "retrieve", time.perf_counter()
     try:
-        query = " ".join([request.topic, *request.objectives])
-        chunks = await rerank_search(conn, query, SOURCES_PER_LESSON)
-        await log_run(conn, lesson_id, step, started)
         source_ids = {c["id"] for c in chunks}
         sources = format_sources(chunks)
         lesson_system, lesson_version = load_prompt("lesson")

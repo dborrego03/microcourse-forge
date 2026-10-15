@@ -2,6 +2,7 @@
 
     uv run python -m forge.evals retrieval [--mode vector|hybrid|rerank] [--check]
     uv run python -m forge.evals generation [--check]
+    uv run python -m forge.evals guardrails [--check]
 
 Results go to evals/results/ and to the eval_runs table, so every number in
 the README can be traced back to a commit.
@@ -20,10 +21,11 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 
 from forge.db import connect, run
+from forge.guardrails import Blocked, check_scope, check_text, moderate
 from forge.judge import CRITERIA, JUDGE_MODEL, review_lesson
 from forge.lessons import GENERATOR_MODEL, GenerationError, LessonRequest, create_lesson
 from forge.llm import LLMError
-from forge.search import SEARCH_MODES
+from forge.search import SEARCH_MODES, rerank_search
 from forge.version import git_sha
 
 EVALS_DIR = Path(__file__).resolve().parents[3] / "evals"
@@ -180,6 +182,46 @@ async def eval_generation(dataset: str = "generation_v1") -> dict:
     return report
 
 
+async def blocked_by(conn, topic: str, objectives: list[str]) -> str | None:
+    try:
+        check_text(topic, *objectives)
+        results = await rerank_search(conn, " ".join([topic, *objectives]), 1)
+        check_scope(results[0]["score"])
+        await asyncio.to_thread(moderate, topic, objectives)
+    except Blocked as e:
+        return e.rule
+    return None
+
+
+async def eval_guardrails(dataset: str = "redteam_v1") -> dict:
+    attacks = load_cases(dataset)
+    # Everything in the other datasets is a legitimate request that must get through.
+    legit = [(c["question"], []) for c in load_cases("retrieval_v1")]
+    legit += [(c["topic"], c["objectives"]) for c in load_cases("generation_v1")]
+
+    async with await connect() as conn:
+        results = [(c, await blocked_by(conn, c["topic"], c["objectives"])) for c in attacks]
+        false_positives = [topic for topic, objectives in legit if await blocked_by(conn, topic, objectives)]
+
+        metrics = {"block_rate": sum(1 for _, rule in results if rule) / len(results)}
+        for kind in sorted({c["kind"] for c in attacks}):
+            of_kind = [rule for c, rule in results if c["kind"] == kind]
+            metrics[f"block_rate_{kind}"] = sum(1 for rule in of_kind if rule) / len(of_kind)
+        metrics["legit_pass_rate"] = 1 - len(false_positives) / len(legit)
+        report = {
+            "kind": "guardrails",
+            "dataset": dataset,
+            "cases": len(attacks),
+            "config": {"legit_cases": len(legit)},
+            "metrics": {name: round(value, 3) for name, value in metrics.items()},
+            "missed": [c["id"] for c, rule in results if not rule],
+            "false_positives": false_positives,
+            "git_sha": git_sha(),
+        }
+        await save(conn, report)
+    return report
+
+
 def check(report: dict) -> list[str]:
     config = tomllib.loads((EVALS_DIR / "thresholds.toml").read_text())
     thresholds = config.get(report["kind"], {})
@@ -196,17 +238,21 @@ def check(report: dict) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=["retrieval", "generation"])
+    parser.add_argument("kind", choices=["retrieval", "generation", "guardrails"])
     parser.add_argument("--mode", choices=list(SEARCH_MODES), default="vector", help="retrieval only")
+    parser.add_argument("--dataset", default="redteam_v1", help="guardrails only")
     parser.add_argument("--check", action="store_true", help="exit 1 if a metric is below its threshold")
     args = parser.parse_args()
 
     if args.kind == "retrieval":
         report = run(eval_retrieval(args.mode))
         name = f"retrieval-{args.mode}"
-    else:
+    elif args.kind == "generation":
         report = run(eval_generation())
         name = "generation"
+    else:
+        report = run(eval_guardrails(args.dataset))
+        name = f"guardrails-{args.dataset}"
     out = EVALS_DIR / "results" / f"{name}.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -216,6 +262,10 @@ def main() -> None:
         print(f"  {metric:<24} {value}")
     if report.get("misses"):
         print(f"  not found in top 10: {', '.join(report['misses'])}")
+    if report.get("missed"):
+        print(f"  attacks that got through: {', '.join(report['missed'])}")
+    for text in report.get("false_positives", []):
+        print(f"  legit request blocked: {text}")
 
     if args.check and (failures := check(report)):
         sys.exit("quality gate failed:\n  " + "\n  ".join(failures))

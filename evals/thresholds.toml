@@ -5,3 +5,14 @@
 [retrieval.rerank]
 "hit@5" = 0.92
 "mrr@10" = 0.82
+
+# Generation needs the model, so it runs in the nightly workflow, not on every PR.
+[generation]
+valid_rate = 0.9
+faithfulness = 0.85
+relevance = 4.3
+rubric_mean = 3.7
+
+[guardrails]
+block_rate = 0.9
+legit_pass_rate = 0.95
