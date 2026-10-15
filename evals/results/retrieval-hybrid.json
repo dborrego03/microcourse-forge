@@ -1,0 +1,21 @@
+{
+  "kind": "retrieval",
+  "dataset": "retrieval_v1",
+  "cases": 50,
+  "config": {
+    "mode": "hybrid"
+  },
+  "metrics": {
+    "hit@1": 0.62,
+    "hit@3": 0.88,
+    "hit@5": 0.96,
+    "hit@10": 0.98,
+    "mrr@10": 0.764,
+    "latency_p50_ms": 14.5,
+    "latency_p95_ms": 29.8
+  },
+  "misses": [
+    "r50"
+  ],
+  "git_sha": "01b5b54"
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "retrieval",
+  "dataset": "retrieval_v1",
+  "cases": 50,
+  "config": {
+    "mode": "vector"
+  },
+  "metrics": {
+    "hit@1": 0.62,
+    "hit@3": 0.9,
+    "hit@5": 0.94,
+    "hit@10": 1.0,
+    "mrr@10": 0.761,
+    "latency_p50_ms": 15.5,
+    "latency_p95_ms": 58.2
+  },
+  "misses": [],
+  "git_sha": "01b5b54"
+}

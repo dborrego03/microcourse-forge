@@ -1,0 +1,7 @@
+# Minimum scores for the CI quality gate (uv run python -m forge.evals ... --check).
+# Each one is the first measured baseline minus a margin. On a 50-case dataset one
+# case is 0.02, so the margin keeps a single borderline case from failing the build.
+
+[retrieval.rerank]
+"hit@5" = 0.92
+"mrr@10" = 0.82

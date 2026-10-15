@@ -37,3 +37,18 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run alembic upgrade head
       - run: uv run pytest
+
+      # The book isn't in the repo; fetch the exact copy the eval labels were written against.
+      - uses: actions/cache@v6
+        with:
+          path: data/raw/psychology-2e.pdf
+          key: psychology-2e-2f08113c
+      - name: Download the corpus
+        working-directory: .
+        run: |
+          [ -f data/raw/psychology-2e.pdf ] || curl -sSfL -o data/raw/psychology-2e.pdf \
+            https://assets.openstax.org/oscms-prodcms/media/documents/Psychology2e_WEB.pdf
+          echo "2f08113c78127bc684922ad6a819db22bd4705ce9fcf28a07f36a2041b1474e2  data/raw/psychology-2e.pdf" \
+            | sha256sum -c
+      - run: uv run python -m forge.ingest
+      - run: uv run python -m forge.evals retrieval --mode rerank --check

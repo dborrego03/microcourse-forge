@@ -17,8 +17,9 @@ Correction (2026-10-15): an earlier version of this file said CC BY 4.0. The cop
 
 ## How to get it
 The book is not committed to this repo.
-1. Open the page above and download the PDF.
-2. Save it as `data/raw/psychology-2e.pdf` (git-ignored).
+1. Open the page above and download the PDF (direct link used by CI:
+   https://assets.openstax.org/oscms-prodcms/media/documents/Psychology2e_WEB.pdf).
+2. Save it as `data/raw/psychology-2e.pdf` (git-ignored) and check the SHA-256 below.
 3. Only chapters 6, 7 and 8 are ingested.
 
 Downloaded copy used for the numbers in this repo:
