@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+env               = "dev"
+location          = "westeurope"
+api_image         = "ghcr.io/dborrego03/microcourse-forge-api:latest"
+web_image         = "ghcr.io/dborrego03/microcourse-forge-web:latest"
+budget_start_date = "2026-11-01T00:00:00Z"
+alert_email       = "you@example.com"
+monthly_budget    = 20
+
+# Optional. Leave them out and pass them as TF_VAR_anthropic_api_key / TF_VAR_openai_api_key.
+# anthropic_api_key = ""
+# openai_api_key    = ""

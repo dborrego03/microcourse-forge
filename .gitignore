@@ -241,3 +241,9 @@ data/media/
 
 # The Python template above ignores every lib/ folder; this one is source code.
 !apps/web/app/lib/
+
+# Terraform: keep the lock files, never the vars or the backend config
+*.tfvars
+!*.tfvars.example
+infra/terraform/backend.hcl
+tfplan
