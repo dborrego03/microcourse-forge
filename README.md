@@ -8,6 +8,15 @@ Status: work in progress (MVP in progress).
 docker compose up -d
 ```
 
+## Ingestion (in progress)
+Needs [uv](https://docs.astral.sh/uv/) and the book in `data/raw/` (see [docs/corpus.md](docs/corpus.md)).
+```
+cd apps/api
+uv sync
+uv run python -m forge.ingest   # lists the sections found in chapters 6-8
+uv run pytest
+```
+
 ## Roadmap
 - MVP: ingestion, retrieval, lesson + quiz generation, minimal UI
 - v1: hybrid search + reranking, audio, SCORM export, evals in CI, tracing, IaC

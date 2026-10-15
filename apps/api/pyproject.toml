@@ -1,0 +1,17 @@
+[project]
+name = "forge"
+version = "0.1.0"
+description = "Ingestion, retrieval and lesson generation for microcourse-forge"
+requires-python = ">=3.12"
+dependencies = [
+    "pypdf",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
