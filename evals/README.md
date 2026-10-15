@@ -63,11 +63,6 @@ harm and personal data.
 uv run python -m forge.evals guardrails --dataset redteam_holdout
 ```
 
-## License
-The evidence quotes come from *Psychology 2e* by OpenStax (Spielman, Jenkins, Lovett),
-licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
-Access for free at openstax.org. The datasets in this folder are shared under the same license.
-
 ## Judge calibration (`labels.csv`)
 The judge's rubric scores only mean something if they track a human's. `labels.csv` lists 23
 distinct generated lessons with a link to each one; the six rubric columns are filled in by hand
@@ -81,3 +76,8 @@ uv run python -m forge.calibration agreement
 reports, per criterion, exact agreement, agreement within one point, quadratic-weighted Cohen's
 kappa and the mean difference (positive means the judge is more generous). Status: not labelled
 yet, so the generation scores above are uncalibrated.
+
+## License
+The evidence quotes come from *Psychology 2e* by OpenStax (Spielman, Jenkins, Lovett),
+licensed [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Access for free at openstax.org. The datasets in this folder are shared under the same license.
