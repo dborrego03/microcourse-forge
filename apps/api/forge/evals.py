@@ -26,7 +26,9 @@ EVALS_DIR = Path(__file__).resolve().parents[3] / "evals"
 
 def git_sha() -> str:
     try:
-        return subprocess.check_output(["git", "describe", "--always", "--dirty", "--abbrev=7"], text=True).strip()
+        return subprocess.check_output(
+            ["git", "describe", "--always", "--dirty", "--abbrev=7"], text=True
+        ).strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
