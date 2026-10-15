@@ -235,3 +235,6 @@ data/raw/*
 
 # Local editor/assistant settings
 .claude/
+
+# Generated narration (Blob storage when deployed)
+data/media/

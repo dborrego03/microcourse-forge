@@ -1,6 +1,7 @@
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 
 from forge.db import connect
 from forge.guardrails import Blocked
@@ -8,6 +9,7 @@ from forge.lessons import GenerationError, LessonRequest, create_lesson, get_les
 from forge.llm import LLMError
 from forge.scorm import build_scorm12, package_name
 from forge.search import SEARCH_MODES
+from forge.tts import MEDIA_DIR, TTSError, narrate
 
 app = FastAPI(title="microcourse-forge")
 
@@ -67,7 +69,28 @@ async def scorm_package(lesson_id: int):
     if not found or found["status"] != "ready":
         raise HTTPException(404, "no ready lesson with that id")
     return Response(
-        build_scorm12(found),
+        build_scorm12(found, MEDIA_DIR / f"lesson-{lesson_id}"),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{package_name(found)}"'},
     )
+
+
+@app.post("/lessons/{lesson_id}/audio")
+async def narrate_lesson(lesson_id: int):
+    async with await connect() as conn:
+        found = await get_lesson(conn, lesson_id)
+        if not found or found["status"] != "ready":
+            raise HTTPException(404, "no ready lesson with that id")
+        try:
+            return await narrate(conn, found)
+        except TTSError as e:
+            raise HTTPException(503, str(e)) from e
+
+
+@app.get("/media/lesson-{lesson_id}/part-{part}.{ext}")
+async def media(lesson_id: int, part: int, ext: Literal["mp3", "vtt"]):
+    # Ints and a fixed extension, so the path can't point outside the media folder.
+    path = MEDIA_DIR / f"lesson-{lesson_id}" / f"part-{part}.{ext}"
+    if not path.exists():
+        raise HTTPException(404, "no such file")
+    return FileResponse(path, media_type="audio/mpeg" if ext == "mp3" else "text/vtt")

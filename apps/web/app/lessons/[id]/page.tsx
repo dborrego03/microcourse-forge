@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { getLesson } from "../../lib/api";
+import { NarrateButton } from "./narrate-button";
 import { Quiz } from "./quiz";
 
 export default function LessonPage({ params }: PageProps<"/lessons/[id]">) {
@@ -41,6 +42,22 @@ async function LessonView({ id }: { id: string }) {
         </a>
       ));
   const license = sources[0];
+  const narrated = new Set(data.audio.map((a) => a.part));
+  const player = (part: number) =>
+    narrated.has(part) && (
+      <div className="mb-3">
+        <audio controls preload="none" src={`/media/lesson-${data.id}/part-${part}.mp3`} className="w-full">
+          <track
+            kind="captions"
+            srcLang="en"
+            label="English"
+            src={`/media/lesson-${data.id}/part-${part}.vtt`}
+            default
+          />
+        </audio>
+        <p className="text-xs text-stone-600">Synthetic voice. Captions follow the text below.</p>
+      </div>
+    );
 
   return (
     <article className="space-y-8">
@@ -54,6 +71,11 @@ async function LessonView({ id }: { id: string }) {
         >
           Download as a SCORM 1.2 package
         </a>
+        {narrated.size === 0 && (
+          <span className="ml-4">
+            <NarrateButton lessonId={data.id} />
+          </span>
+        )}
       </header>
 
       <section aria-labelledby="objectives">
@@ -67,9 +89,10 @@ async function LessonView({ id }: { id: string }) {
         </ol>
       </section>
 
-      {lesson.sections.map((s) => (
+      {lesson.sections.map((s, i) => (
         <section key={s.heading}>
           <h2 className="mb-2 text-xl font-semibold">{s.heading}</h2>
+          {player(i + 1)}
           <p className="leading-relaxed">
             {s.body}
             {cite(s.sources)}
@@ -85,6 +108,7 @@ async function LessonView({ id }: { id: string }) {
 
       <section>
         <h2 className="mb-2 text-xl font-semibold">Summary</h2>
+        {player(lesson.sections.length + 1)}
         <p className="leading-relaxed">{lesson.summary}</p>
       </section>
 

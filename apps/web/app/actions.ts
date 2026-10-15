@@ -33,3 +33,12 @@ export async function createLesson(_prev: FormState, form: FormData): Promise<Fo
   const lesson = await res.json();
   redirect(`/lessons/${lesson.id}`);
 }
+
+export async function narrateLesson(lessonId: number): Promise<FormState> {
+  const res = await fetch(`${API_URL}/lessons/${lessonId}/audio`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    return { error: `Couldn't narrate the lesson: ${body?.detail ?? `the API answered ${res.status}`}` };
+  }
+  redirect(`/lessons/${lessonId}`);
+}

@@ -10,6 +10,7 @@ import json
 import re
 import zipfile
 from html import escape
+from pathlib import Path
 
 MASTERY_SCORE = 70  # percent of graded questions needed to pass
 
@@ -35,8 +36,7 @@ MANIFEST = """<?xml version="1.0" encoding="UTF-8"?>
   </organizations>
   <resources>
     <resource identifier="sco-1" type="webcontent" adlcp:scormtype="sco" href="index.html">
-      <file href="index.html"/>
-      <file href="LICENSE.txt"/>
+{files}
     </resource>
   </resources>
 </manifest>
@@ -106,7 +106,15 @@ label { display: block; padding: .2rem 0; } .feedback { font-size: .9rem; } .ok 
 """
 
 
-def render_html(lesson: dict) -> str:
+def audio_tag(part: int) -> str:
+    return (
+        f'<audio controls preload="none" src="audio/part-{part}.mp3">'
+        f'<track kind="captions" srclang="en" label="English" src="audio/part-{part}.vtt" default></audio>'
+        "<br><small>Synthetic voice.</small>"
+    )
+
+
+def render_html(lesson: dict, narrated: bool = False) -> str:
     body, quiz, sources = lesson["lesson"], lesson["quiz"]["questions"], lesson["sources"]
     number = {s["id"]: i for i, s in enumerate(sources, 1)}
 
@@ -123,13 +131,16 @@ def render_html(lesson: dict) -> str:
         *(f"<li>{escape(o)}</li>" for o in body["objectives"]),
         "</ol>",
     ]
-    for section in body["sections"]:
+    for n, section in enumerate(body["sections"], 1):
+        if narrated:
+            parts.append(audio_tag(n))
         parts.append(
             f"<h2>{escape(section['heading'])}</h2><p>{escape(section['body'])}{cite(section['sources'])}</p>"
         )
         if section.get("example"):
             parts.append(f'<p class="example"><strong>Example:</strong> {escape(section["example"])}</p>')
-    parts.append(f"<h2>Summary</h2><p>{escape(body['summary'])}</p><h2>Check yourself</h2>")
+    summary_audio = audio_tag(len(body["sections"]) + 1) if narrated else ""
+    parts.append(f"<h2>Summary</h2>{summary_audio}<p>{escape(body['summary'])}</p><h2>Check yourself</h2>")
     for i, q in enumerate(quiz):
         parts.append(f"<fieldset><legend>{i + 1}. {escape(q['question'])}</legend>")
         if q["type"] == "short_answer":
@@ -179,14 +190,27 @@ def package_name(lesson: dict) -> str:
     return f"lesson-{lesson['id']}-{slug}-scorm12.zip"
 
 
-def build_scorm12(lesson: dict) -> bytes:
-    """`lesson` is a ready row from forge.lessons.get_lesson."""
-    buffer = io.BytesIO()
+def build_scorm12(lesson: dict, media_dir: Path | None = None) -> bytes:
+    """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
+    audio = {}
+    if media_dir and lesson.get("audio"):
+        for a in lesson["audio"]:
+            for ext in ("mp3", "vtt"):
+                audio[f"audio/part-{a['part']}.{ext}"] = (media_dir / f"part-{a['part']}.{ext}").read_bytes()
+
+    files = {
+        "index.html": render_html(lesson, narrated=bool(audio)).encode(),
+        "LICENSE.txt": license_text(lesson).encode(),
+        **audio,
+    }
     title = escape(lesson["lesson"]["title"])
-    manifest = MANIFEST.format(id=lesson["id"], title=title, mastery=MASTERY_SCORE)
+    file_list = "\n".join(f'      <file href="{name}"/>' for name in files)
+    manifest = MANIFEST.format(id=lesson["id"], title=title, mastery=MASTERY_SCORE, files=file_list)
+
+    buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         # The manifest has to sit at the root of the zip.
         zf.writestr("imsmanifest.xml", manifest)
-        zf.writestr("index.html", render_html(lesson))
-        zf.writestr("LICENSE.txt", license_text(lesson))
+        for name, content in files.items():
+            zf.writestr(name, content)
     return buffer.getvalue()

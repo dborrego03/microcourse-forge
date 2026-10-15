@@ -254,7 +254,10 @@ async def get_lesson(conn: psycopg.AsyncConnection, lesson_id: int) -> dict | No
                       'pages', c.pdf_page_start || '-' || c.pdf_page_end,
                       'text', c.text, 'title', d.title, 'license', d.license, 'license_url', d.license_url,
                       'attribution', d.attribution, 'source_url', d.source_url
-                  ) ORDER BY c.id) FILTER (WHERE c.id IS NOT NULL), '[]') AS sources
+                  ) ORDER BY c.id) FILTER (WHERE c.id IS NOT NULL), '[]') AS sources,
+                  (SELECT coalesce(json_agg(json_build_object('part', a.part, 'duration_s', a.duration_s)
+                                            ORDER BY a.part), '[]')
+                   FROM audio_assets a WHERE a.lesson_id = l.id) AS audio
            FROM lessons l
            LEFT JOIN chunks c ON c.id = ANY (l.source_chunk_ids)
            LEFT JOIN documents d ON d.id = c.document_id
