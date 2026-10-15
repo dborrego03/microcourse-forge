@@ -107,7 +107,7 @@ def call_claude(system: str, prompt: str, schema: dict, model: str) -> LLMResult
 def complete_json(system: str, prompt: str, schema: dict, model: str) -> LLMResult:
     key = hashlib.sha256(json.dumps([model, system, prompt, schema], sort_keys=True).encode()).hexdigest()
     path = CACHE_DIR / f"{key}.json"
-    if path.exists():
+    if path.exists() and os.environ.get("FORGE_LLM_CACHE") != "off":
         return LLMResult(**{**json.loads(path.read_text(encoding="utf-8")), "cached": True})
 
     result = call_claude(system, prompt, schema, model)

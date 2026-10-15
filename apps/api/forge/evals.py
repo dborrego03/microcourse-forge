@@ -1,12 +1,14 @@
 """Offline evaluations.
 
-    uv run python -m forge.evals retrieval [--mode vector] [--check]
+    uv run python -m forge.evals retrieval [--mode vector|hybrid|rerank] [--check]
+    uv run python -m forge.evals generation [--check]
 
 Results go to evals/results/ and to the eval_runs table, so every number in
 the README can be traced back to a commit.
 """
 
 import argparse
+import asyncio
 import json
 import re
 import statistics
@@ -18,6 +20,9 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 
 from forge.db import connect, run
+from forge.judge import CRITERIA, JUDGE_MODEL, review_lesson
+from forge.lessons import GENERATOR_MODEL, GenerationError, LessonRequest, create_lesson
+from forge.llm import LLMError
 from forge.search import SEARCH_MODES
 from forge.version import git_sha
 
@@ -46,8 +51,24 @@ def retrieval_metrics(ranks: list[int | None], ks=(1, 3, 5, 10)) -> dict:
     return {name: round(value, 3) for name, value in metrics.items()}
 
 
-def percentile(values: list[float], p: int) -> float:
+def percentile(values: list[float], p: int) -> float | None:
+    if len(values) < 2:
+        return round(values[0], 1) if values else None
     return round(statistics.quantiles(values, n=100)[p - 1], 1)
+
+
+async def save(conn, report: dict) -> None:
+    await conn.execute(
+        "INSERT INTO eval_runs (kind, dataset, config, metrics, git_sha) VALUES (%s, %s, %s, %s, %s)",
+        [
+            report["kind"],
+            report["dataset"],
+            Jsonb(report["config"]),
+            Jsonb(report["metrics"]),
+            report["git_sha"],
+        ],
+    )
+    await conn.commit()
 
 
 async def eval_retrieval(mode: str, dataset: str = "retrieval_v1") -> dict:
@@ -56,9 +77,8 @@ async def eval_retrieval(mode: str, dataset: str = "retrieval_v1") -> dict:
 
     async with await connect() as conn:
         rows = await (await conn.execute("SELECT text FROM chunks")).fetchall()
-        corpus = [normalize(row["text"]) for row in rows]
-        missing = [c["id"] for c in cases if normalize(c["evidence"]) not in " ".join(corpus)]
-        if missing:
+        corpus = " ".join(normalize(row["text"]) for row in rows)
+        if missing := [c["id"] for c in cases if normalize(c["evidence"]) not in corpus]:
             sys.exit(f"evidence not found in the loaded corpus for: {', '.join(missing)}")
 
         ranks, latencies = [], []
@@ -80,19 +100,93 @@ async def eval_retrieval(mode: str, dataset: str = "retrieval_v1") -> dict:
             "misses": [c["id"] for c, r in zip(cases, ranks, strict=True) if r is None],
             "git_sha": git_sha(),
         }
-        await conn.execute(
-            "INSERT INTO eval_runs (kind, dataset, config, metrics, git_sha) VALUES (%s, %s, %s, %s, %s)",
-            ["retrieval", dataset, Jsonb(report["config"]), Jsonb(metrics), report["git_sha"]],
-        )
-        await conn.commit()
+        await save(conn, report)
+    return report
+
+
+def generation_metrics(rows: list[dict]) -> dict:
+    ready = [r for r in rows if r["status"] == "ready"]
+    claims = sum(r["claims"] for r in ready)
+    fresh = [r for r in ready if not r["cached"]]
+    metrics = {
+        "valid_rate": len(ready) / len(rows),
+        "valid_first_try_rate": sum(1 for r in ready if r["retries"] == 0) / len(rows),
+        "faithfulness": sum(r["supported"] for r in ready) / claims if claims else 0.0,
+        "relevance": statistics.mean(r["relevance"] for r in ready) if ready else 0.0,
+    }
+    for name in CRITERIA:
+        metrics[f"rubric_{name}"] = statistics.mean(r["rubric"][name] for r in ready) if ready else 0.0
+    metrics["rubric_mean"] = statistics.mean(metrics[f"rubric_{n}"] for n in CRITERIA)
+    metrics = {name: round(value, 3) for name, value in metrics.items()}
+    # Cost is the API-price estimate of the original calls, so it holds for cached rows too.
+    metrics["cost_per_lesson_usd"] = (
+        round(statistics.mean(r["cost_usd"] for r in ready), 4) if ready else None
+    )
+    # Latency only makes sense for lessons that really called the model in this run.
+    metrics["lesson_latency_p50_ms"] = percentile([r["latency_ms"] for r in fresh], 50)
+    metrics["lesson_latency_p95_ms"] = percentile([r["latency_ms"] for r in fresh], 95)
+    metrics["fresh_lessons"] = len(fresh)
+    return metrics
+
+
+async def eval_generation(dataset: str = "generation_v1") -> dict:
+    cases = load_cases(dataset)
+    rows = []
+    async with await connect() as conn:
+        for case in cases:
+            request = LessonRequest(topic=case["topic"], objectives=case["objectives"], level=case["level"])
+            print(f"  {case['id']} {case['topic']}", file=sys.stderr, flush=True)
+            try:
+                lesson = await create_lesson(conn, request)
+                review, _ = await asyncio.to_thread(review_lesson, lesson)
+            except (GenerationError, LLMError) as e:
+                rows.append({"id": case["id"], "status": "failed", "error": str(e)[:300]})
+                continue
+            cur = await conn.execute(
+                """SELECT sum(retries) AS retries, sum(cost_usd)::float AS cost, sum(latency_ms) AS latency,
+                          bool_or(cached) AS cached
+                   FROM runs WHERE lesson_id = %s""",
+                [lesson["id"]],
+            )
+            stats = await cur.fetchone()
+            rows.append(
+                {
+                    "id": case["id"],
+                    "lesson_id": lesson["id"],
+                    "status": "ready",
+                    "retries": stats["retries"],
+                    "cached": stats["cached"],
+                    "cost_usd": stats["cost"],
+                    "latency_ms": stats["latency"],
+                    "claims": len(review.claims),
+                    "supported": sum(c.supported for c in review.claims),
+                    "unsupported": [c.claim for c in review.claims if not c.supported],
+                    "relevance": review.relevance.score,
+                    "rubric": {name: getattr(review, name).score for name in CRITERIA},
+                    "reasons": {name: getattr(review, name).reason for name in ("relevance", *CRITERIA)},
+                }
+            )
+
+        report = {
+            "kind": "generation",
+            "dataset": dataset,
+            "cases": len(cases),
+            "config": {"generator": GENERATOR_MODEL, "judge": JUDGE_MODEL},
+            "metrics": generation_metrics(rows),
+            "git_sha": git_sha(),
+            "lessons": rows,
+        }
+        await save(conn, report)
     return report
 
 
 def check(report: dict) -> list[str]:
     config = tomllib.loads((EVALS_DIR / "thresholds.toml").read_text())
-    thresholds = config[report["kind"]].get(report["config"]["mode"])
-    if thresholds is None:
-        return [f"no thresholds for {report['kind']}.{report['config']['mode']} in thresholds.toml"]
+    thresholds = config.get(report["kind"], {})
+    if mode := report["config"].get("mode"):
+        thresholds = thresholds.get(mode, {})
+    if not thresholds:
+        return [f"no thresholds for {report['kind']} {mode or ''} in thresholds.toml"]
     return [
         f"{name} = {report['metrics'][name]} is below {minimum}"
         for name, minimum in thresholds.items()
@@ -102,22 +196,25 @@ def check(report: dict) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=["retrieval"])
-    parser.add_argument("--mode", choices=list(SEARCH_MODES), default="vector")
+    parser.add_argument("kind", choices=["retrieval", "generation"])
+    parser.add_argument("--mode", choices=list(SEARCH_MODES), default="vector", help="retrieval only")
     parser.add_argument("--check", action="store_true", help="exit 1 if a metric is below its threshold")
     args = parser.parse_args()
 
-    report = run(eval_retrieval(args.mode))
-    out = EVALS_DIR / "results" / f"retrieval-{args.mode}.json"
+    if args.kind == "retrieval":
+        report = run(eval_retrieval(args.mode))
+        name = f"retrieval-{args.mode}"
+    else:
+        report = run(eval_generation())
+        name = "generation"
+    out = EVALS_DIR / "results" / f"{name}.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(report, indent=2) + "\n")
+    out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
-    print(
-        f"{report['kind']} ({args.mode}) on {report['dataset']}, {report['cases']} cases, {report['git_sha']}"
-    )
-    for name, value in report["metrics"].items():
-        print(f"  {name:<16} {value}")
-    if report["misses"]:
+    print(f"{name} on {report['dataset']}, {report['cases']} cases, {report['git_sha']}")
+    for metric, value in report["metrics"].items():
+        print(f"  {metric:<24} {value}")
+    if report.get("misses"):
         print(f"  not found in top 10: {', '.join(report['misses'])}")
 
     if args.check and (failures := check(report)):
