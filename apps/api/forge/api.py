@@ -84,8 +84,12 @@ async def lesson_package(lesson_id: int, kind: Literal["scorm", "cmi5"]):
     if not found or found["status"] != "ready":
         raise HTTPException(404, "no ready lesson with that id")
     name, build = PACKAGES[kind]
+    try:
+        package = build(found, MEDIA_DIR / f"lesson-{lesson_id}")
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from e
     return Response(
-        build(found, MEDIA_DIR / f"lesson-{lesson_id}"),
+        package,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{package_name(found, name)}"'},
     )

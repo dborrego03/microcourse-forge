@@ -22,11 +22,18 @@ def text_hash(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
-async def ingest(pdf: Path) -> None:
+async def ingest(pdf: Path, force: bool = False) -> None:
     started = time.perf_counter()
     digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
     if digest != KNOWN_SHA256:
         print(f"warning: {pdf.name} is not the copy listed in docs/corpus.md", file=sys.stderr)
+
+    # Reloading replaces every chunk id, and lessons cite chunks by id, so it is opt-in.
+    async with await connect() as conn:
+        cur = await conn.execute("SELECT id FROM documents WHERE content_hash = %s", [digest])
+        if not force and await cur.fetchone():
+            print("already loaded; pass --force to reload (existing lessons lose their citations)")
+            return
 
     sections = load_sections(pdf)
     chunks = [c for s in sections for c in chunk_section(s, embeddings.count_tokens)]
@@ -102,12 +109,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Load chapters 6-8 of the book into Postgres.")
     parser.add_argument("pdf", nargs="?", type=Path, default=DEFAULT_PDF)
     parser.add_argument("--url", help="download the PDF first (used by the container job)")
+    parser.add_argument("--force", action="store_true", help="reload even if this copy is already loaded")
     args = parser.parse_args()
 
     pdf = download(args.url) if args.url else args.pdf
     if not pdf.exists():
         sys.exit(f"{pdf} not found. See docs/corpus.md for how to download it.")
-    run(ingest(pdf))
+    run(ingest(pdf, args.force))
 
 
 if __name__ == "__main__":

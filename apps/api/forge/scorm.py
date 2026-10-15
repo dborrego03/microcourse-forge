@@ -187,6 +187,9 @@ def render_html(lesson: dict, narrated: bool = False, runtime: str = SCORM_JS) -
 
 
 def license_text(lesson: dict) -> str:
+    if not lesson["sources"]:
+        # Without its sources there is no attribution to ship, so no package either.
+        raise ValueError("this lesson's sources are no longer loaded (the book was re-ingested)")
     s = lesson["sources"][0]
     return (
         f"This package is adapted from {s['title']} (OpenStax), {s['source_url']}\n"
@@ -223,10 +226,11 @@ def zip_files(files: dict[str, bytes | str]) -> bytes:
 
 def build_scorm12(lesson: dict, media_dir: Path | None = None) -> bytes:
     """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
+    license_txt = license_text(lesson)  # first, so a lesson without sources fails clearly
     audio = audio_files(lesson, media_dir)
     files = {
         "index.html": render_html(lesson, narrated=bool(audio)),
-        "LICENSE.txt": license_text(lesson),
+        "LICENSE.txt": license_txt,
         **audio,
     }
     file_list = "\n".join(f'      <file href="{name}"/>' for name in files)

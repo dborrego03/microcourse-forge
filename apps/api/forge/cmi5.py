@@ -142,6 +142,7 @@ def au(au_id: str, lesson: dict, url: str) -> str:
 def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
     """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
     course_id = f"{IRI}/lessons/{lesson['id']}"
+    license_txt = license_text(lesson)  # first, so a lesson without sources fails clearly
     audio = audio_files(lesson, media_dir)
     structure = COURSE_STRUCTURE.format(
         id=course_id,
@@ -153,7 +154,7 @@ def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
         {
             "cmi5.xml": structure,
             "index.html": render_html(lesson, narrated=bool(audio), runtime=CMI5_JS),
-            "LICENSE.txt": license_text(lesson),
+            "LICENSE.txt": license_txt,
             **audio,
         }
     )
@@ -162,6 +163,8 @@ def build_cmi5(lesson: dict, media_dir: Path | None = None) -> bytes:
 def build_cmi5_course(title: str, description: str, lessons: list[dict], media_root: Path) -> bytes:
     """Several lessons as one cmi5 course, one AU per lesson in its own folder."""
     course_id = f"{IRI}/courses/" + "-".join(str(lesson["id"]) for lesson in lessons)
+    for lesson in lessons:
+        license_text(lesson)  # every lesson needs its sources before anything is built
     files: dict[str, str | bytes] = {"LICENSE.txt": license_text(lessons[0])}
     aus = []
     for lesson in lessons:

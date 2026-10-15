@@ -85,3 +85,10 @@ def test_citations_are_numbered_in_source_order():
 
 def test_package_name_is_a_safe_filename():
     assert package_name(LESSON) == "lesson-7-pavlov-script-alert-1-script-scorm12.zip"
+
+
+def test_no_package_without_sources():
+    import pytest
+
+    with pytest.raises(ValueError, match="re-ingested"):
+        build_scorm12({**LESSON, "sources": []})
