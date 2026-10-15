@@ -47,6 +47,13 @@ async function LessonView({ id }: { id: string }) {
       <header>
         <p className="text-sm uppercase tracking-wide text-stone-600">{data.request.level} lesson</p>
         <h1 className="text-3xl font-semibold">{lesson.title}</h1>
+        <a
+          href={`/lessons/${data.id}/scorm`}
+          download
+          className="mt-3 inline-block text-sm text-teal-800 underline hover:text-teal-950"
+        >
+          Download as a SCORM 1.2 package
+        </a>
       </header>
 
       <section aria-labelledby="objectives">

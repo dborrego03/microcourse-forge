@@ -1,11 +1,12 @@
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from forge.db import connect
 from forge.guardrails import Blocked
 from forge.lessons import GenerationError, LessonRequest, create_lesson, get_lesson
 from forge.llm import LLMError
+from forge.scorm import build_scorm12, package_name
 from forge.search import SEARCH_MODES
 
 app = FastAPI(title="microcourse-forge")
@@ -57,3 +58,16 @@ async def lesson(lesson_id: int):
         if found := await get_lesson(conn, lesson_id):
             return found
     raise HTTPException(404, "lesson not found")
+
+
+@app.get("/lessons/{lesson_id}/scorm")
+async def scorm_package(lesson_id: int):
+    async with await connect() as conn:
+        found = await get_lesson(conn, lesson_id)
+    if not found or found["status"] != "ready":
+        raise HTTPException(404, "no ready lesson with that id")
+    return Response(
+        build_scorm12(found),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{package_name(found)}"'},
+    )
