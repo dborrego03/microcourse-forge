@@ -14,4 +14,8 @@ docker compose up -d
 - v2: MCP server, agent with approval, cmi5/xAPI
 
 ## License
-Code: MIT. Content: OpenStax Psychology 2e (CC BY 4.0), "Access for free at openstax.org". See docs/corpus.md.
+- Code: MIT.
+- Source content: OpenStax *Psychology 2e*, CC BY-NC-SA 4.0. Access for free at openstax.org.
+- Generated lessons and quizzes are adaptations of that book and are shared under CC BY-NC-SA 4.0.
+
+See [docs/corpus.md](docs/corpus.md).

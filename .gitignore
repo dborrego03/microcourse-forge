@@ -224,7 +224,8 @@ node_modules/
 .terraform/
 *.tfstate*
 
-# Personal notes (private)
+# Personal notes and assistant instructions (private)
+CLAUDE.md
 CLAUDE.local.md
 docs/*.local.md
 

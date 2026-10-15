@@ -13,7 +13,7 @@ Show, with reproducible evidence, an end-to-end LLM system: retrieval over an op
 ingest -> chunk -> embed + index -> retrieve -> generate lesson (JSON, citations) -> generate quiz -> evaluate -> (v1) narrate -> (v1) export.
 Each step will emit a trace with latency, tokens and cost.
 
-## Decisions to respect
+## Working decisions
 - Chunking: split by headings, then by size (starting point: 300-800 tokens, 10-20 % overlap). Measure before tuning.
 - Structured output: Pydantic / JSON Schema; retry once returning the validation error to the model; version prompts in the repo.
 - Evaluation: three levels (retrieval hit@k and MRR; generation faithfulness and relevance; pedagogical rubric). Start with 30-50 labeled cases.
@@ -25,4 +25,4 @@ chunks(id, document_id, ordinal, section_path, text, token_count, embedding, emb
 courses, lessons, quiz_items, runs, eval_runs, eval_cases (added as the phases need them).
 
 ## Licensing
-The corpus is OpenStax Psychology 2e, chapters 6 (Learning), 7 (Thinking and Intelligence) and 8 (Memory), licensed CC BY 4.0 (verified in the book's preface). Details and download instructions are in docs/corpus.md. CC BY 4.0 requires attribution only: there is no non-commercial or share-alike restriction. Generated lessons are derived from the source and must carry the attribution "Access for free at openstax.org". The source book is never committed to the repo. Lessons are generated in English in the MVP.
+The corpus is OpenStax Psychology 2e, chapters 6 (Learning), 7 (Thinking and Intelligence) and 8 (Memory), licensed CC BY-NC-SA 4.0. Generated lessons are adaptations of the book, so they are non-commercial, shared under the same license and carry the attribution "Access for free at openstax.org". The code is MIT. The book is never committed to the repo. Details and download steps are in docs/corpus.md.
