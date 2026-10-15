@@ -42,9 +42,38 @@ MANIFEST = """<?xml version="1.0" encoding="UTF-8"?>
 </manifest>
 """
 
+# Grading is the same for every package type; each runtime defines report(score).
+QUIZ_JS = """
+var reported = false;
+document.getElementById("check").addEventListener("click", function () {
+  var graded = 0, correct = 0;
+  QUIZ.forEach(function (q, i) {
+    var box = document.getElementById("feedback-" + i);
+    if (q.type === "short_answer") {
+      box.textContent = "Model answer: " + q.answer + " " + q.feedback;
+    } else {
+      graded++;
+      var picked = document.querySelector('input[name="q' + i + '"]:checked');
+      var ok = picked && picked.value === q.answer;
+      if (ok) correct++;
+      box.textContent = (ok ? "Correct. " : "Answer: " + q.answer + ". ") + q.feedback;
+      box.className = ok ? "feedback ok" : "feedback wrong";
+    }
+    box.hidden = false;
+  });
+  var score = graded ? Math.round((100 * correct) / graded) : 100;
+  document.getElementById("score").textContent = correct + " of " + graded + " correct (" + score + "%)";
+  // Only the first attempt counts: after it the answers are on screen.
+  if (!reported) {
+    reported = true;
+    report(score);
+  }
+});
+"""
+
 # Finds the LMS API the way the SCORM 1.2 run-time spec describes: walk up the
 # parent frames, then try the opener window.
-RUNTIME = """
+SCORM_JS = """
 var api = null;
 function findAPI(win) {
   for (var i = 0; win && i < 10; i++) {
@@ -66,32 +95,14 @@ if (api) {
 }
 window.addEventListener("beforeunload", function () { if (api) api.LMSFinish(""); });
 
-document.getElementById("check").addEventListener("click", function () {
-  var graded = 0, correct = 0;
-  QUIZ.forEach(function (q, i) {
-    var box = document.getElementById("feedback-" + i);
-    if (q.type === "short_answer") {
-      box.textContent = "Model answer: " + q.answer + " " + q.feedback;
-    } else {
-      graded++;
-      var picked = document.querySelector('input[name="q' + i + '"]:checked');
-      var ok = picked && picked.value === q.answer;
-      if (ok) correct++;
-      box.textContent = (ok ? "Correct. " : "Answer: " + q.answer + ". ") + q.feedback;
-      box.className = ok ? "feedback ok" : "feedback wrong";
-    }
-    box.hidden = false;
-  });
-  var score = graded ? Math.round((100 * correct) / graded) : 100;
-  document.getElementById("score").textContent = correct + " of " + graded + " correct (" + score + "%)";
-  if (api) {
-    api.LMSSetValue("cmi.core.score.min", "0");
-    api.LMSSetValue("cmi.core.score.max", "100");
-    api.LMSSetValue("cmi.core.score.raw", String(score));
-    api.LMSSetValue("cmi.core.lesson_status", score >= MASTERY ? "passed" : "failed");
-    api.LMSCommit("");
-  }
-});
+function report(score) {
+  if (!api) return;
+  api.LMSSetValue("cmi.core.score.min", "0");
+  api.LMSSetValue("cmi.core.score.max", "100");
+  api.LMSSetValue("cmi.core.score.raw", String(score));
+  api.LMSSetValue("cmi.core.lesson_status", score >= MASTERY ? "passed" : "failed");
+  api.LMSCommit("");
+}
 """
 
 STYLE = """
@@ -114,7 +125,7 @@ def audio_tag(part: int) -> str:
     )
 
 
-def render_html(lesson: dict, narrated: bool = False) -> str:
+def render_html(lesson: dict, narrated: bool = False, runtime: str = SCORM_JS) -> str:
     body, quiz, sources = lesson["lesson"], lesson["quiz"]["questions"], lesson["sources"]
     number = {s["id"]: i for i, s in enumerate(sources, 1)}
 
@@ -170,7 +181,8 @@ def render_html(lesson: dict, narrated: bool = False) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{escape(body['title'])}</title><style>{STYLE}</style></head><body>"
         + "\n".join(parts)
-        + f"<script>var QUIZ = {quiz_json}; var MASTERY = {MASTERY_SCORE};{RUNTIME}</script></body></html>\n"
+        + f"<script>var QUIZ = {quiz_json}; var MASTERY = {MASTERY_SCORE};{runtime}{QUIZ_JS}</script>"
+        + "</body></html>\n"
     )
 
 
@@ -185,32 +197,41 @@ def license_text(lesson: dict) -> str:
     )
 
 
-def package_name(lesson: dict) -> str:
+def package_name(lesson: dict, kind: str = "scorm12") -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", lesson["lesson"]["title"].lower()).strip("-")[:60]
-    return f"lesson-{lesson['id']}-{slug}-scorm12.zip"
+    return f"lesson-{lesson['id']}-{slug}-{kind}.zip"
+
+
+def audio_files(lesson: dict, media_dir: Path | None) -> dict[str, bytes]:
+    """The lesson's narration as zip entries, or nothing if it hasn't been narrated."""
+    if not media_dir or not lesson.get("audio"):
+        return {}
+    return {
+        f"audio/part-{a['part']}.{ext}": (media_dir / f"part-{a['part']}.{ext}").read_bytes()
+        for a in lesson["audio"]
+        for ext in ("mp3", "vtt")
+    }
+
+
+def zip_files(files: dict[str, bytes | str]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in files.items():
+            zf.writestr(name, content)
+    return buffer.getvalue()
 
 
 def build_scorm12(lesson: dict, media_dir: Path | None = None) -> bytes:
     """`lesson` is a ready row from forge.lessons.get_lesson; media_dir holds its narration, if any."""
-    audio = {}
-    if media_dir and lesson.get("audio"):
-        for a in lesson["audio"]:
-            for ext in ("mp3", "vtt"):
-                audio[f"audio/part-{a['part']}.{ext}"] = (media_dir / f"part-{a['part']}.{ext}").read_bytes()
-
+    audio = audio_files(lesson, media_dir)
     files = {
-        "index.html": render_html(lesson, narrated=bool(audio)).encode(),
-        "LICENSE.txt": license_text(lesson).encode(),
+        "index.html": render_html(lesson, narrated=bool(audio)),
+        "LICENSE.txt": license_text(lesson),
         **audio,
     }
-    title = escape(lesson["lesson"]["title"])
     file_list = "\n".join(f'      <file href="{name}"/>' for name in files)
-    manifest = MANIFEST.format(id=lesson["id"], title=title, mastery=MASTERY_SCORE, files=file_list)
-
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        # The manifest has to sit at the root of the zip.
-        zf.writestr("imsmanifest.xml", manifest)
-        for name, content in files.items():
-            zf.writestr(name, content)
-    return buffer.getvalue()
+    manifest = MANIFEST.format(
+        id=lesson["id"], title=escape(lesson["lesson"]["title"]), mastery=MASTERY_SCORE, files=file_list
+    )
+    # The manifest has to sit at the root of the zip.
+    return zip_files({"imsmanifest.xml": manifest, **files})

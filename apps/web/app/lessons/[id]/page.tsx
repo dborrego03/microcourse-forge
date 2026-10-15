@@ -64,13 +64,24 @@ async function LessonView({ id }: { id: string }) {
       <header>
         <p className="text-sm uppercase tracking-wide text-stone-600">{data.request.level} lesson</p>
         <h1 className="text-3xl font-semibold">{lesson.title}</h1>
-        <a
-          href={`/lessons/${data.id}/scorm`}
-          download
-          className="mt-3 inline-block text-sm text-teal-800 underline hover:text-teal-950"
-        >
-          Download as a SCORM 1.2 package
-        </a>
+        <p className="mt-3 text-sm">
+          Download for an LMS:{" "}
+          <a
+            href={`/lessons/${data.id}/scorm`}
+            download
+            className="text-teal-800 underline hover:text-teal-950"
+          >
+            SCORM 1.2
+          </a>{" "}
+          ·{" "}
+          <a
+            href={`/lessons/${data.id}/cmi5`}
+            download
+            className="text-teal-800 underline hover:text-teal-950"
+          >
+            cmi5 (xAPI)
+          </a>
+        </p>
         {narrated.size === 0 && (
           <span className="ml-4">
             <NarrateButton lessonId={data.id} />

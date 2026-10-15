@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
+from forge.cmi5 import build_cmi5
 from forge.db import connect
 from forge.guardrails import Blocked
 from forge.lessons import GenerationError, LessonRequest, create_lesson, get_lesson
@@ -62,16 +63,20 @@ async def lesson(lesson_id: int):
     raise HTTPException(404, "lesson not found")
 
 
-@app.get("/lessons/{lesson_id}/scorm")
-async def scorm_package(lesson_id: int):
+PACKAGES = {"scorm": ("scorm12", build_scorm12), "cmi5": ("cmi5", build_cmi5)}
+
+
+@app.get("/lessons/{lesson_id}/{kind}")
+async def lesson_package(lesson_id: int, kind: Literal["scorm", "cmi5"]):
     async with await connect() as conn:
         found = await get_lesson(conn, lesson_id)
     if not found or found["status"] != "ready":
         raise HTTPException(404, "no ready lesson with that id")
+    name, build = PACKAGES[kind]
     return Response(
-        build_scorm12(found, MEDIA_DIR / f"lesson-{lesson_id}"),
+        build(found, MEDIA_DIR / f"lesson-{lesson_id}"),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{package_name(found)}"'},
+        headers={"Content-Disposition": f'attachment; filename="{package_name(found, name)}"'},
     )
 
 

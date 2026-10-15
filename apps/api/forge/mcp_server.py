@@ -15,6 +15,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from forge import REPO_ROOT
+from forge.cmi5 import build_cmi5
 from forge.db import connect, run
 from forge.judge import CRITERIA, review_lesson
 from forge.lessons import LessonRequest, create_lesson, get_lesson
@@ -83,15 +84,16 @@ async def evaluate_lesson(lesson_id: int) -> dict:
 
 
 @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True))
-async def export_package(lesson_id: int) -> dict:
-    """Write the lesson as a SCORM 1.2 zip under data/exports and return its path. Ask the user first."""
+async def export_package(lesson_id: int, format: Literal["scorm12", "cmi5"] = "scorm12") -> dict:
+    """Write the lesson as a SCORM 1.2 or cmi5 zip under data/exports. Ask the user first."""
     async with await connect() as conn:
         lesson = await get_lesson(conn, lesson_id)
     if not lesson or lesson["status"] != "ready":
         raise ValueError(f"no ready lesson with id {lesson_id}")
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-    path = EXPORT_DIR / package_name(lesson)
-    path.write_bytes(build_scorm12(lesson, MEDIA_DIR / f"lesson-{lesson_id}"))
+    path = EXPORT_DIR / package_name(lesson, format)
+    build = build_cmi5 if format == "cmi5" else build_scorm12
+    path.write_bytes(build(lesson, MEDIA_DIR / f"lesson-{lesson_id}"))
     return {"path": str(path), "size_bytes": path.stat().st_size}
 
 
