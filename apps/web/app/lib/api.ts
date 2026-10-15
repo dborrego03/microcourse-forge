@@ -56,5 +56,27 @@ async function get<T>(path: string): Promise<T | null> {
   return res.json();
 }
 
+export type Metrics = {
+  evals: {
+    kind: string;
+    dataset: string;
+    config: Record<string, unknown>;
+    metrics: Record<string, number | null>;
+    git_sha: string;
+    created_at: string;
+  }[];
+  steps: {
+    step: string;
+    runs: number;
+    cache_hit_rate: number;
+    p50_ms: number | null;
+    p95_ms: number | null;
+    avg_cost_usd: number | null;
+  }[];
+  blocked: { rule: string; requests: number }[];
+  lessons: { status: string; lessons: number }[];
+};
+
+export const getMetrics = () => get<Metrics>("/metrics");
 export const getLesson = (id: string) => get<Lesson>(`/lessons/${encodeURIComponent(id)}`);
 export const listLessons = () => get<LessonSummary[]>("/lessons?limit=10");

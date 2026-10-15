@@ -36,3 +36,10 @@ test("the home page lists recent lessons", async ({ page }) => {
   const recent = page.getByRole("heading", { name: "Recent lessons" }).locator("..");
   await expect(recent.getByRole("link").first()).toBeVisible();
 });
+
+test("the quality page shows evals and pipeline steps", async ({ page }) => {
+  await page.goto("/quality");
+  await expect(page.getByRole("heading", { name: "Evaluations" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /^rerank/ })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "lesson", exact: true })).toBeVisible();
+});

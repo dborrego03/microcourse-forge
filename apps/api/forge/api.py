@@ -99,3 +99,35 @@ async def media(lesson_id: int, part: int, ext: Literal["mp3", "vtt"]):
     if not path.exists():
         raise HTTPException(404, "no such file")
     return FileResponse(path, media_type="audio/mpeg" if ext == "mp3" else "text/vtt")
+
+
+@app.get("/metrics")
+async def metrics():
+    """What the quality page shows: latest evals, and latency, cost and cache use per pipeline step."""
+    async with await connect() as conn:
+        evals = await conn.execute(
+            """SELECT DISTINCT ON (kind, dataset, config->>'mode')
+                      kind, dataset, config, metrics, git_sha, created_at
+               FROM eval_runs ORDER BY kind, dataset, config->>'mode', created_at DESC"""
+        )
+        # Cached calls take a few ms and cost nothing new, so latency and cost come from fresh ones.
+        steps = await conn.execute(
+            """SELECT step, count(*) AS runs, round(avg(cached::int), 3)::float AS cache_hit_rate,
+                      percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms)
+                          FILTER (WHERE NOT cached) AS p50_ms,
+                      percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)
+                          FILTER (WHERE NOT cached) AS p95_ms,
+                      round(avg(cost_usd) FILTER (WHERE NOT cached), 5)::float AS avg_cost_usd
+               FROM runs WHERE status = 'ok' GROUP BY step ORDER BY min(id)"""
+        )
+        blocked = await conn.execute(
+            """SELECT error AS rule, count(*) AS requests FROM runs
+               WHERE status = 'blocked' GROUP BY 1 ORDER BY 2 DESC"""
+        )
+        lessons = await conn.execute("SELECT status, count(*) AS lessons FROM lessons GROUP BY 1 ORDER BY 1")
+        return {
+            "evals": await evals.fetchall(),
+            "steps": await steps.fetchall(),
+            "blocked": await blocked.fetchall(),
+            "lessons": await lessons.fetchall(),
+        }

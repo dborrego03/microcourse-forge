@@ -13,11 +13,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en">
       <body className="bg-stone-50 text-stone-900 antialiased">
         <header className="border-b border-stone-200 bg-white">
-          <div className="mx-auto max-w-3xl px-4 py-3">
+          <nav className="mx-auto flex max-w-3xl items-center gap-6 px-4 py-3">
             <Link href="/" className="font-semibold text-teal-900">
               microcourse-forge
             </Link>
-          </div>
+            <Link href="/quality" className="text-sm text-teal-800 underline hover:text-teal-950">
+              Quality
+            </Link>
+          </nav>
         </header>
         <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>
         <footer className="mx-auto max-w-3xl px-4 pb-8 text-sm text-stone-600">
