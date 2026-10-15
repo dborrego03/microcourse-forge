@@ -15,5 +15,14 @@ services:
       interval: 5s
       retries: 10
 
+  # Local trace viewer: docker compose --profile tracing up -d, then open http://localhost:16686
+  # and run the API with OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    profiles: [tracing]
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+
 volumes:
   pgdata:

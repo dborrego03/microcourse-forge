@@ -13,9 +13,10 @@ import psycopg
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from forge.guardrails import check_scope, check_text, moderate
+from forge.guardrails import Blocked, check_scope, check_text, moderate
 from forge.llm import LLMResult, complete_json
 from forge.search import rerank_search
+from forge.tracing import Step, step, tracer
 from forge.version import git_sha
 
 PROMPTS = Path(__file__).parent / "prompts"
@@ -147,71 +148,90 @@ def generate(model_cls, system: str, prompt: str, check) -> tuple[BaseModel, LLM
     raise GenerationError("; ".join(problems))
 
 
-async def log_run(conn, lesson_id, step, started, result=None, retries=0, error=None) -> None:
+async def log_run(conn, lesson_id, step: Step, status="ok", error=None) -> None:
+    result = step.result
     await conn.execute(
         """INSERT INTO runs (lesson_id, step, status, model, tokens_in, tokens_out, cost_usd,
-                             latency_ms, retries, cached, error, git_sha)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                             latency_ms, retries, cached, error, git_sha, trace_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         [
-            lesson_id, step, "error" if error else "ok",
+            lesson_id, step.name, status,
             result.model if result else None,
             result.tokens_in if result else 0,
             result.tokens_out if result else 0,
             result.cost_usd if result else 0,
-            round((time.perf_counter() - started) * 1000), retries,
-            result.cached if result else False, error, git_sha(),
+            step.ms, step.retries, result.cached if result else False,
+            error, git_sha(), step.trace_id,
         ],
     )  # fmt: skip
 
 
 async def create_lesson(conn: psycopg.AsyncConnection, request: LessonRequest) -> dict:
-    # Guardrails run before anything is stored, so a blocked request (which may
-    # contain personal data) never reaches the database or the model.
-    check_text(request.topic, *request.objectives)
-    started = time.perf_counter()
-    chunks = await rerank_search(conn, " ".join([request.topic, *request.objectives]), SOURCES_PER_LESSON)
-    check_scope(chunks[0]["score"] if chunks else float("-inf"))
-    await asyncio.to_thread(moderate, request.topic, request.objectives)
+    with tracer.start_as_current_span("create_lesson") as root:
+        root.set_attributes({"lesson.topic": request.topic, "lesson.level": request.level})
+        # Guardrails run before the request is stored, so a blocked one (which may contain
+        # personal data) never reaches the lessons table or the generator. Only the rule
+        # that blocked it is logged.
+        with step("guard") as guard:
+            try:
+                check_text(request.topic, *request.objectives)
+                with step("retrieve") as retrieve:
+                    chunks = await rerank_search(
+                        conn, " ".join([request.topic, *request.objectives]), SOURCES_PER_LESSON
+                    )
+                check_scope(chunks[0]["score"] if chunks else float("-inf"))
+                guard.record(await asyncio.to_thread(moderate, request.topic, request.objectives))
+            except Blocked as e:
+                guard.ended = time.perf_counter()
+                await log_run(conn, None, guard, status="blocked", error=e.rule)
+                await conn.commit()
+                raise
 
-    cur = await conn.execute(
-        "INSERT INTO lessons (request, status) VALUES (%s, 'running') RETURNING id",
-        [Jsonb(request.model_dump())],
-    )
-    lesson_id = (await cur.fetchone())["id"]
-    await log_run(conn, lesson_id, "retrieve", started)
-    await conn.commit()
-    try:
+        cur = await conn.execute(
+            "INSERT INTO lessons (request, status) VALUES (%s, 'running') RETURNING id",
+            [Jsonb(request.model_dump())],
+        )
+        lesson_id = (await cur.fetchone())["id"]
+        root.set_attribute("lesson.id", lesson_id)
+        await log_run(conn, lesson_id, retrieve)
+        await log_run(conn, lesson_id, guard)
+        await conn.commit()
+
         source_ids = {c["id"] for c in chunks}
         sources = format_sources(chunks)
         lesson_system, lesson_version = load_prompt("lesson")
         quiz_system, quiz_version = load_prompt("quiz")
+        current = None
+        try:
+            with step("lesson") as current:
+                wanted = "\n".join(f"- {o}" for o in request.objectives) or "(choose them from the sources)"
+                prompt = f"Topic: {request.topic}\nLevel: {request.level}\nObjectives wanted:\n{wanted}"
+                lesson, result, retries = await asyncio.to_thread(
+                    generate,
+                    Lesson,
+                    lesson_system,
+                    f"{prompt}\n\n{sources}",
+                    lambda value: lesson_problems(value, source_ids),
+                )
+                current.record(result, retries)
+            await log_run(conn, lesson_id, current)
 
-        step, started = "lesson", time.perf_counter()
-        wanted = "\n".join(f"- {o}" for o in request.objectives) or "(choose them from the sources)"
-        lesson, result, retries = await asyncio.to_thread(
-            generate,
-            Lesson,
-            lesson_system,
-            f"Topic: {request.topic}\nLevel: {request.level}\nObjectives wanted:\n{wanted}\n\n{sources}",
-            lambda value: lesson_problems(value, source_ids),
-        )
-        await log_run(conn, lesson_id, step, started, result, retries)
-
-        step, started = "quiz", time.perf_counter()
-        quiz, result, retries = await asyncio.to_thread(
-            generate,
-            Quiz,
-            quiz_system,
-            f"Lesson:\n{lesson.model_dump_json(indent=1)}\n\n{sources}",
-            lambda value: quiz_problems(value, lesson, source_ids),
-        )
-        shuffle_options(quiz)
-        await log_run(conn, lesson_id, step, started, result, retries)
-    except Exception as e:
-        await log_run(conn, lesson_id, step, started, error=str(e)[:500])
-        await conn.execute("UPDATE lessons SET status = 'failed' WHERE id = %s", [lesson_id])
-        await conn.commit()
-        raise
+            with step("quiz") as current:
+                quiz, result, retries = await asyncio.to_thread(
+                    generate,
+                    Quiz,
+                    quiz_system,
+                    f"Lesson:\n{lesson.model_dump_json(indent=1)}\n\n{sources}",
+                    lambda value: quiz_problems(value, lesson, source_ids),
+                )
+                shuffle_options(quiz)
+                current.record(result, retries)
+            await log_run(conn, lesson_id, current)
+        except Exception as e:
+            await log_run(conn, lesson_id, current, status="error", error=str(e)[:500])
+            await conn.execute("UPDATE lessons SET status = 'failed' WHERE id = %s", [lesson_id])
+            await conn.commit()
+            raise
 
     await conn.execute(
         """UPDATE lessons SET status = 'ready', lesson = %s, quiz = %s, source_chunk_ids = %s,

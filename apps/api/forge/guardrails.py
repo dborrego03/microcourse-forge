@@ -17,7 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from forge.llm import complete_json
+from forge.llm import LLMResult, complete_json
 
 # Top re-ranker score (jina-reranker-v1-tiny-en logit) below which a request is
 # treated as outside the book. Off-topic red-team inputs scored -0.87 or lower and
@@ -79,9 +79,10 @@ def check_scope(top_score: float) -> None:
         raise Blocked("off_topic")
 
 
-def moderate(topic: str, objectives: list[str]) -> None:
+def moderate(topic: str, objectives: list[str]) -> LLMResult:
     request = json.dumps({"topic": topic, "objectives": objectives})
     result = complete_json(GUARD_PROMPT, f"Request:\n{request}", Verdict.model_json_schema(), GUARD_MODEL)
     verdict = Verdict.model_validate(result.data)
     if verdict.refuse and verdict.category != "none":
         raise Blocked(verdict.category)
+    return result
