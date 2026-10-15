@@ -238,3 +238,6 @@ data/raw/*
 
 # Generated narration (Blob storage when deployed)
 data/media/
+
+# The Python template above ignores every lib/ folder; this one is source code.
+!apps/web/app/lib/
