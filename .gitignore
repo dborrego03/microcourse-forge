@@ -247,3 +247,6 @@ data/media/
 !*.tfvars.example
 infra/terraform/backend.hcl
 tfplan
+
+# Packages written by the MCP export tool
+data/exports/
