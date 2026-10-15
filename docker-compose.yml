@@ -15,6 +15,45 @@ services:
       interval: 5s
       retries: 10
 
+  # The whole app in containers: docker compose --profile app up -d --build
+  # Generating lessons needs the Claude CLI or an API key (docs/adr/0002-llm-provider.md), so in
+  # containers you can browse, search, export and narrate lessons, but not create new ones.
+  migrate:
+    build: apps/api
+    profiles: [app]
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql://forge:forge_dev_password@db:5432/microcourse
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: apps/api
+    profiles: [app]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://forge:forge_dev_password@db:5432/microcourse
+    volumes:
+      - media:/data/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build: apps/web
+    profiles: [app]
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
   # Local trace viewer: docker compose --profile tracing up -d, then open http://localhost:16686
   # and run the API with OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
   jaeger:
@@ -26,3 +65,4 @@ services:
 
 volumes:
   pgdata:
+  media:

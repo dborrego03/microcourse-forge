@@ -16,10 +16,10 @@ import statistics
 import sys
 import time
 import tomllib
-from pathlib import Path
 
 from psycopg.types.json import Jsonb
 
+from forge import REPO_ROOT
 from forge.db import connect, run
 from forge.guardrails import Blocked, check_scope, check_text, moderate
 from forge.judge import CRITERIA, JUDGE_MODEL, review_lesson
@@ -28,7 +28,7 @@ from forge.llm import LLMError
 from forge.search import SEARCH_MODES, rerank_search
 from forge.version import git_sha
 
-EVALS_DIR = Path(__file__).resolve().parents[3] / "evals"
+EVALS_DIR = REPO_ROOT / "evals"
 
 
 def normalize(text: str) -> str:

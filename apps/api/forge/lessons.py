@@ -130,8 +130,7 @@ def shuffle_options(quiz: Quiz) -> None:
 
 def generate(model_cls, system: str, prompt: str, check) -> tuple[BaseModel, LLMResult, int]:
     """One call, plus one retry that shows the model what was wrong. Returns (value, last call, retries)."""
-    schema = model_cls.model_json_schema()
-    result = complete_json(system, prompt, schema, GENERATOR_MODEL)
+    result = complete_json(system, prompt, model_cls, GENERATOR_MODEL)
     for retry in (0, 1):
         try:
             value = model_cls.model_validate(result.data)
@@ -144,7 +143,7 @@ def generate(model_cls, system: str, prompt: str, check) -> tuple[BaseModel, LLM
             break
         feedback = "\n".join(f"- {p}" for p in problems)
         retry_prompt = f"{prompt}\n\nYour previous answer had these problems. Fix them:\n{feedback}"
-        result = complete_json(system, retry_prompt, schema, GENERATOR_MODEL)
+        result = complete_json(system, retry_prompt, model_cls, GENERATOR_MODEL)
     raise GenerationError("; ".join(problems))
 
 

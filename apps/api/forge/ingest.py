@@ -1,12 +1,16 @@
 """Parse the book, chunk it, embed the chunks and load everything into Postgres.
 
-Usage: uv run python -m forge.ingest [path/to/psychology-2e.pdf]
+Usage: uv run python -m forge.ingest [path/to/psychology-2e.pdf | --url URL]
 """
 
+import argparse
 import hashlib
 import sys
+import tempfile
 import time
 from pathlib import Path
+
+import httpx
 
 from forge import embeddings
 from forge.book import BOOK, DEFAULT_PDF, KNOWN_SHA256, load_sections
@@ -81,8 +85,26 @@ async def ingest(pdf: Path) -> None:
     )
 
 
+def download(url: str) -> Path:
+    """Fetch the PDF into a temp file and refuse anything but the copy the evals were labelled on."""
+    path = Path(tempfile.gettempdir()) / "psychology-2e.pdf"
+    with httpx.stream("GET", url, follow_redirects=True, timeout=120) as res:
+        res.raise_for_status()
+        with path.open("wb") as f:
+            for block in res.iter_bytes():
+                f.write(block)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != KNOWN_SHA256:
+        sys.exit(f"{url} doesn't match the SHA-256 in docs/corpus.md; refusing to ingest it")
+    return path
+
+
 def main() -> None:
-    pdf = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PDF
+    parser = argparse.ArgumentParser(description="Load chapters 6-8 of the book into Postgres.")
+    parser.add_argument("pdf", nargs="?", type=Path, default=DEFAULT_PDF)
+    parser.add_argument("--url", help="download the PDF first (used by the container job)")
+    args = parser.parse_args()
+
+    pdf = download(args.url) if args.url else args.pdf
     if not pdf.exists():
         sys.exit(f"{pdf} not found. See docs/corpus.md for how to download it.")
     run(ingest(pdf))

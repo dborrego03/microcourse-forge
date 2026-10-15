@@ -12,7 +12,7 @@ Anthropic's terms allow this for a subscriber's own use and document a CI token 
 - Models are pinned by full id: `claude-haiku-5-5` generates; the judge uses a different model, so it isn't grading its own output.
 - Every response is cached on disk by model + prompts + schema.
 - Retrieval (embeddings and re-ranking) runs locally with fastembed and needs no provider at all.
-- Before a public deployment, add an API-key provider behind the same `complete_json` function and select it by environment variable.
+- Anything deployed uses the Messages API with an API key, through the official `anthropic` SDK (`messages.parse` with the same Pydantic models). `FORGE_LLM_PROVIDER=anthropic` selects it, and the Docker image sets it by default. Without `ANTHROPIC_API_KEY` the API answers 503 instead of generating.
 
 ## Consequences
 - Generating and evaluating costs nothing beyond the subscription, but is subject to its usage limits. The cache keeps reruns cheap.

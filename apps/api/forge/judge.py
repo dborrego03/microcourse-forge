@@ -58,5 +58,5 @@ def review_lesson(lesson: dict) -> tuple[Review, LLMResult]:
         f"Quiz:\n{json.dumps(lesson['quiz'], indent=1)}\n\n"
         f"<sources>\n{sources}\n</sources>"
     )
-    result = complete_json(system, prompt, Review.model_json_schema(), JUDGE_MODEL)
+    result = complete_json(system, prompt, Review, JUDGE_MODEL)
     return Review.model_validate(result.data), result

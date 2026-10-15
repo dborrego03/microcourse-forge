@@ -22,11 +22,13 @@ import httpx
 import psycopg
 from tinytag import TinyTag
 
+from forge import API_DIR, REPO_ROOT
+
 TTS_MODEL = os.environ.get("FORGE_TTS_MODEL", "gpt-4o-mini-tts")
 TTS_VOICE = os.environ.get("FORGE_TTS_VOICE", "alloy")
 API_URL = "https://api.openai.com/v1/audio/speech"
-CACHE_DIR = Path(__file__).resolve().parents[1] / ".cache" / "tts"
-MEDIA_DIR = Path(os.environ.get("FORGE_MEDIA_DIR", Path(__file__).resolve().parents[3] / "data" / "media"))
+CACHE_DIR = API_DIR / ".cache" / "tts"
+MEDIA_DIR = Path(os.environ.get("FORGE_MEDIA_DIR", REPO_ROOT / "data" / "media"))
 MAX_ATTEMPTS = 3
 
 

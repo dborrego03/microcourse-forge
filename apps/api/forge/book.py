@@ -7,7 +7,9 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-DEFAULT_PDF = Path(__file__).resolve().parents[3] / "data" / "raw" / "psychology-2e.pdf"
+from forge import REPO_ROOT
+
+DEFAULT_PDF = REPO_ROOT / "data" / "raw" / "psychology-2e.pdf"
 CHAPTERS = (6, 7, 8)
 
 # The copy listed in docs/corpus.md. Another printing may parse fine, but page

@@ -81,7 +81,7 @@ def check_scope(top_score: float) -> None:
 
 def moderate(topic: str, objectives: list[str]) -> LLMResult:
     request = json.dumps({"topic": topic, "objectives": objectives})
-    result = complete_json(GUARD_PROMPT, f"Request:\n{request}", Verdict.model_json_schema(), GUARD_MODEL)
+    result = complete_json(GUARD_PROMPT, f"Request:\n{request}", Verdict, GUARD_MODEL)
     verdict = Verdict.model_validate(result.data)
     if verdict.refuse and verdict.category != "none":
         raise Blocked(verdict.category)

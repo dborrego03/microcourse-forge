@@ -1,12 +1,14 @@
-"""Structured LLM calls.
+"""Structured LLM calls, with two providers behind one function.
 
-Locally and in my own CI this goes through the Claude Code CLI in headless mode
-(`claude -p --json-schema ...`), which runs on my Claude subscription instead of
-a paid API key. That is only allowed for personal use, so a deployed instance
-that other people use needs an API provider; see docs/adr/0002-llm-provider.md.
+- claude-cli (default): the Claude Code CLI in headless mode (`claude -p --json-schema ...`),
+  which runs on my Claude subscription. Anthropic's terms allow that for my own use and CI,
+  not for serving other people, so it's for local development and evals only.
+- anthropic: the Messages API with an API key (ANTHROPIC_API_KEY), for anything deployed.
 
-Responses are cached on disk by (model, system prompt, prompt, schema), so
-re-running evals or the same lesson request doesn't call the model again.
+FORGE_LLM_PROVIDER picks one. See docs/adr/0002-llm-provider.md.
+
+Responses are cached on disk by (model, system prompt, prompt, schema), so re-running
+evals or the same lesson request doesn't call the model again.
 """
 
 import hashlib
@@ -19,9 +21,19 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-CACHE_DIR = Path(__file__).resolve().parents[1] / ".cache" / "llm"
+import anthropic
+from pydantic import BaseModel, ValidationError
+
+from forge import API_DIR
+
+CACHE_DIR = API_DIR / ".cache" / "llm"
+PROVIDER = os.environ.get("FORGE_LLM_PROVIDER", "claude-cli")
 TIMEOUT_S = 240
 MAX_ATTEMPTS = 3
+
+# USD per million tokens (input, output), from Anthropic's pricing page in October 2026.
+# Only used by the API provider; the CLI reports its own estimate.
+PRICES = {"claude-haiku-5-5": (0.10, 0.50), "claude-sonnet-5-5": (2.00, 10.00)}
 
 
 class LLMError(Exception):
@@ -34,7 +46,7 @@ class LLMResult:
     model: str
     tokens_in: int
     tokens_out: int
-    cost_usd: float  # what the same call would cost at API list prices, as reported by the CLI
+    cost_usd: float  # at API list prices; for the CLI this is its own estimate
     latency_ms: int
     attempts: int = 1
     cached: bool = False
@@ -50,7 +62,7 @@ def claude_command() -> str:
     return str(native) if native.exists() else found
 
 
-def call_claude(system: str, prompt: str, schema: dict, model: str) -> LLMResult:
+def call_claude_cli(system: str, prompt: str, schema: dict, model: str) -> LLMResult:
     command = [
         claude_command(), "-p",
         "--output-format", "json",
@@ -77,6 +89,8 @@ def call_claude(system: str, prompt: str, schema: dict, model: str) -> LLMResult
             except subprocess.TimeoutExpired:
                 error = f"timed out after {TIMEOUT_S}s"
                 continue
+            except OSError as e:
+                raise LLMError(f"can't run the Claude CLI ({e}); set FORGE_LLM_PROVIDER=anthropic") from e
         try:
             out = json.loads(proc.stdout)
         except json.JSONDecodeError:
@@ -104,13 +118,56 @@ def call_claude(system: str, prompt: str, schema: dict, model: str) -> LLMResult
     raise LLMError(error)
 
 
-def complete_json(system: str, prompt: str, schema: dict, model: str) -> LLMResult:
+def call_anthropic_api(system: str, prompt: str, output: type[BaseModel], model: str) -> LLMResult:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise LLMError("ANTHROPIC_API_KEY is not set, so lessons can't be generated here")
+    # The SDK retries 429, 5xx and connection errors on its own.
+    client = anthropic.Anthropic(timeout=TIMEOUT_S, max_retries=MAX_ATTEMPTS - 1)
+    started = time.perf_counter()
+    try:
+        response = client.messages.parse(
+            model=model,
+            max_tokens=16000,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+            output_format=output,
+        )
+    except ValidationError as e:
+        raise LLMError(f"the model's JSON didn't match the schema: {e}") from e
+    except anthropic.APIStatusError as e:
+        raise LLMError(f"Anthropic API error {e.status_code}: {e.message}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError(f"can't reach the Anthropic API: {e}") from e
+
+    if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
+        raise LLMError(f"no usable answer (stop reason: {response.stop_reason})")
+    usage = response.usage
+    tokens_in = (
+        usage.input_tokens + (usage.cache_creation_input_tokens or 0) + (usage.cache_read_input_tokens or 0)
+    )
+    price_in, price_out = PRICES.get(model, (0.0, 0.0))
+    return LLMResult(
+        data=response.parsed_output.model_dump(),
+        model=model,
+        tokens_in=tokens_in,
+        tokens_out=usage.output_tokens,
+        cost_usd=(tokens_in * price_in + usage.output_tokens * price_out) / 1_000_000,
+        latency_ms=round((time.perf_counter() - started) * 1000),
+    )
+
+
+def complete_json(system: str, prompt: str, output: type[BaseModel], model: str) -> LLMResult:
+    """Ask `model` for JSON shaped like `output`. Returns the raw dict; callers validate it."""
+    schema = output.model_json_schema()
     key = hashlib.sha256(json.dumps([model, system, prompt, schema], sort_keys=True).encode()).hexdigest()
     path = CACHE_DIR / f"{key}.json"
     if path.exists() and os.environ.get("FORGE_LLM_CACHE") != "off":
         return LLMResult(**{**json.loads(path.read_text(encoding="utf-8")), "cached": True})
 
-    result = call_claude(system, prompt, schema, model)
+    if PROVIDER == "anthropic":
+        result = call_anthropic_api(system, prompt, output, model)
+    else:
+        result = call_claude_cli(system, prompt, schema, model)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(asdict(result)), encoding="utf-8")
     return result
