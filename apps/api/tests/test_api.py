@@ -2,6 +2,7 @@ import httpx
 import psycopg
 import pytest
 
+from forge import api
 from forge.api import app
 from forge.db import connect
 
@@ -29,3 +30,9 @@ async def test_packages_only_come_in_known_formats(client):
 
 async def test_search_rejects_tiny_queries(client):
     assert (await client.get("/search", params={"q": "a"})).status_code == 422
+
+
+async def test_new_lessons_stop_at_the_daily_limit(client, monkeypatch):
+    monkeypatch.setattr(api, "DAILY_REQUEST_LIMIT", 0)
+    res = await client.post("/lessons", json={"topic": "Classical conditioning"})
+    assert res.status_code == 429

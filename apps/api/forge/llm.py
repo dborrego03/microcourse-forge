@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import anthropic
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from forge import API_DIR
 
@@ -125,21 +125,22 @@ def call_anthropic_api(system: str, prompt: str, output: type[BaseModel], model:
     client = anthropic.Anthropic(timeout=TIMEOUT_S, max_retries=MAX_ATTEMPTS - 1)
     started = time.perf_counter()
     try:
-        response = client.messages.parse(
+        # The schema constrains the shape; the caller still validates the rest (lengths,
+        # cross-field rules) so it can retry with feedback, exactly as with the CLI.
+        response = client.messages.create(
             model=model,
             max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": prompt}],
-            output_format=output,
+            output_config={"format": {"type": "json_schema", "schema": anthropic.transform_schema(output)}},
         )
-    except ValidationError as e:
-        raise LLMError(f"the model's JSON didn't match the schema: {e}") from e
     except anthropic.APIStatusError as e:
         raise LLMError(f"Anthropic API error {e.status_code}: {e.message}") from e
     except anthropic.APIConnectionError as e:
         raise LLMError(f"can't reach the Anthropic API: {e}") from e
 
-    if response.stop_reason in ("refusal", "max_tokens") or response.parsed_output is None:
+    text = next((block.text for block in response.content if block.type == "text"), None)
+    if response.stop_reason in ("refusal", "max_tokens") or text is None:
         raise LLMError(f"no usable answer (stop reason: {response.stop_reason})")
     usage = response.usage
     tokens_in = (
@@ -147,7 +148,7 @@ def call_anthropic_api(system: str, prompt: str, output: type[BaseModel], model:
     )
     price_in, price_out = PRICES.get(model, (0.0, 0.0))
     return LLMResult(
-        data=response.parsed_output.model_dump(),
+        data=json.loads(text),
         model=model,
         tokens_in=tokens_in,
         tokens_out=usage.output_tokens,
@@ -156,18 +157,29 @@ def call_anthropic_api(system: str, prompt: str, output: type[BaseModel], model:
     )
 
 
+def cache_path(system: str, prompt: str, output: type[BaseModel], model: str) -> Path:
+    key = [model, system, prompt, output.model_json_schema()]
+    return CACHE_DIR / f"{hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()}.json"
+
+
+def forget(system: str, prompt: str, output: type[BaseModel], model: str) -> None:
+    """Drop a cached answer, e.g. one that failed validation."""
+    cache_path(system, prompt, output, model).unlink(missing_ok=True)
+
+
 def complete_json(system: str, prompt: str, output: type[BaseModel], model: str) -> LLMResult:
     """Ask `model` for JSON shaped like `output`. Returns the raw dict; callers validate it."""
-    schema = output.model_json_schema()
-    key = hashlib.sha256(json.dumps([model, system, prompt, schema], sort_keys=True).encode()).hexdigest()
-    path = CACHE_DIR / f"{key}.json"
+    path = cache_path(system, prompt, output, model)
     if path.exists() and os.environ.get("FORGE_LLM_CACHE") != "off":
         return LLMResult(**{**json.loads(path.read_text(encoding="utf-8")), "cached": True})
 
     if PROVIDER == "anthropic":
         result = call_anthropic_api(system, prompt, output, model)
     else:
-        result = call_claude_cli(system, prompt, schema, model)
+        result = call_claude_cli(system, prompt, output.model_json_schema(), model)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(result)), encoding="utf-8")
+    # Write then rename, so an interrupted write can't leave a broken entry behind.
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(asdict(result)), encoding="utf-8")
+    os.replace(tmp, path)
     return result

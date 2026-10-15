@@ -49,6 +49,7 @@ MESSAGES = {
     "harmful": "The request asks for help with something harmful.",
     "personal_data": "Please don't include personal data about real people.",
     "off_topic": "That topic isn't covered by the source book (chapters on learning, thinking and memory).",
+    "refused": "That request can't be turned into a lesson.",
 }
 
 
@@ -83,6 +84,7 @@ def moderate(topic: str, objectives: list[str]) -> LLMResult:
     request = json.dumps({"topic": topic, "objectives": objectives})
     result = complete_json(GUARD_PROMPT, f"Request:\n{request}", Verdict, GUARD_MODEL)
     verdict = Verdict.model_validate(result.data)
-    if verdict.refuse and verdict.category != "none":
-        raise Blocked(verdict.category)
+    if verdict.refuse:
+        # A refusal without a category is still a refusal.
+        raise Blocked(verdict.category if verdict.category != "none" else "refused")
     return result

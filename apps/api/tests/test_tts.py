@@ -78,3 +78,35 @@ def test_scorm_package_includes_narration(tmp_path):
     assert "audio/part-2.mp3" in zf.namelist()
     assert '<file href="audio/part-1.vtt"/>' in zf.read("imsmanifest.xml").decode()
     assert 'src="audio/part-1.mp3"' in zf.read("index.html").decode()
+
+
+def test_network_errors_become_tts_errors(isolated):
+    def handler(request):
+        raise httpx.ConnectTimeout("too slow")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(TTSError, match="can't reach"):
+        synthesize("Hello.", client)
+
+
+async def test_narrating_twice_reuses_the_audio(conn, isolated, monkeypatch, tmp_path):
+    calls = []
+
+    def fake_synthesize(text):
+        calls.append(text)
+        return SILENT_MP3
+
+    monkeypatch.setattr(tts, "synthesize", fake_synthesize)
+    monkeypatch.setattr(tts, "MEDIA_DIR", tmp_path)
+    cur = await conn.execute("INSERT INTO lessons (request, status) VALUES ('{}', 'ready') RETURNING id")
+    lesson = {"id": (await cur.fetchone())["id"], "lesson": LESSON["lesson"]}
+    # narrate() commits, so clean up by hand afterwards.
+    try:
+        first = await tts.narrate(conn, lesson)
+        again = await tts.narrate(conn, lesson)
+    finally:
+        await conn.execute("DELETE FROM lessons WHERE id = %s", [lesson["id"]])
+        await conn.commit()
+
+    assert len(first) == 2 and [a["id"] for a in again] == [a["id"] for a in first]
+    assert len(calls) == 2  # two parts, synthesized once

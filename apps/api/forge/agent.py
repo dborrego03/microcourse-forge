@@ -97,22 +97,31 @@ async def run_course(goal: str, wanted: int, approve: Callable[[str], bool]) -> 
         if not approve(f"Generate these {len(plan.lessons)} lessons?"):
             return "stopped: plan not approved"
 
+        # Every model call the pipeline makes is a row in runs, failed lessons included, so the
+        # budget is the plan + whatever runs logged since now + the judge's reviews.
+        since = (await (await conn.execute("SELECT now() AS t")).fetchone())["t"]
+        planning, judging = spent, 0.0
         outcomes = []
         for planned in plan.lessons:
             if reason := over_limits(spent, started):
                 print(f"  stopping early: {reason}")
                 break
             request = LessonRequest(topic=planned.topic, objectives=planned.objectives)
+            lesson = review = None
             try:
                 lesson = await create_lesson(conn, request)
                 review, judged = await asyncio.to_thread(review_lesson, lesson)
+                judging += judged.cost_usd
             except (Blocked, GenerationError, LLMError) as e:
                 print(f"  x {planned.topic}: {e}")
+            finally:
+                cur = await conn.execute(
+                    "SELECT coalesce(sum(cost_usd), 0)::float AS cost FROM runs WHERE created_at >= %s",
+                    [since],
+                )
+                spent = planning + (await cur.fetchone())["cost"] + judging
+            if review is None:
                 continue
-            cur = await conn.execute(
-                "SELECT sum(cost_usd)::float AS cost FROM runs WHERE lesson_id = %s", [lesson["id"]]
-            )
-            spent += (await cur.fetchone())["cost"] + judged.cost_usd
             claims = review.claims
             outcome = {
                 "lesson": lesson,

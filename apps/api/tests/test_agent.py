@@ -42,7 +42,9 @@ class FakeConn:
         return False
 
     async def execute(self, sql, params=None):
-        rows = [{"section_path": s} for s in SECTIONS] if "section_path" in sql else [{"cost": 0.01}]
+        rows = (
+            [{"section_path": s} for s in SECTIONS] if "section_path" in sql else [{"cost": 0.01, "t": None}]
+        )
 
         async def fetchall():
             return rows

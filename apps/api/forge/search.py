@@ -5,6 +5,8 @@
 - rerank: hybrid candidates re-ordered by a small cross-encoder
 """
 
+import asyncio
+
 import psycopg
 
 from forge import embeddings
@@ -22,7 +24,7 @@ async def vector_search(conn: psycopg.AsyncConnection, query: str, k: int = 5) -
             FROM chunks c
             ORDER BY c.embedding <=> %(v)s
             LIMIT %(k)s""",
-        {"v": embeddings.embed_query(query), "k": k},
+        {"v": await asyncio.to_thread(embeddings.embed_query, query), "k": k},
     )
     return await cur.fetchall()
 
@@ -51,14 +53,15 @@ async def hybrid_search(conn: psycopg.AsyncConnection, query: str, k: int = 5) -
             WHERE v.id IS NOT NULL OR t.id IS NOT NULL
             ORDER BY score DESC
             LIMIT %(k)s""",
-        {"q": query, "v": embeddings.embed_query(query), "n": HYBRID_POOL, "k": k},
+        {"q": query, "v": await asyncio.to_thread(embeddings.embed_query, query), "n": HYBRID_POOL, "k": k},
     )
     return await cur.fetchall()
 
 
 async def rerank_search(conn: psycopg.AsyncConnection, query: str, k: int = 5) -> list[dict]:
     candidates = await hybrid_search(conn, query, RERANK_CANDIDATES)
-    scores = embeddings.rerank(query, [c["text"] for c in candidates])
+    # ONNX inference is CPU-bound; off the event loop it doesn't stall other requests.
+    scores = await asyncio.to_thread(embeddings.rerank, query, [c["text"] for c in candidates])
     ranked = sorted(zip(scores, candidates, strict=True), key=lambda pair: pair[0], reverse=True)
     return [{**c, "score": float(score)} for score, c in ranked[:k]]
 

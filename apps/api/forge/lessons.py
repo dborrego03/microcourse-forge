@@ -14,7 +14,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from forge.guardrails import Blocked, check_scope, check_text, moderate
-from forge.llm import LLMResult, complete_json
+from forge.llm import LLMResult, complete_json, forget
 from forge.search import rerank_search
 from forge.tracing import Step, step, tracer
 from forge.version import git_sha
@@ -85,7 +85,9 @@ class Quiz(BaseModel):
 
 
 class GenerationError(Exception):
-    pass
+    def __init__(self, problems: str, result: LLMResult | None = None):
+        super().__init__(problems)
+        self.result = result  # the last call, so what it cost still gets logged
 
 
 def format_sources(chunks: list[dict]) -> str:
@@ -130,8 +132,9 @@ def shuffle_options(quiz: Quiz) -> None:
 
 def generate(model_cls, system: str, prompt: str, check) -> tuple[BaseModel, LLMResult, int]:
     """One call, plus one retry that shows the model what was wrong. Returns (value, last call, retries)."""
-    result = complete_json(system, prompt, model_cls, GENERATOR_MODEL)
+    current_prompt = prompt
     for retry in (0, 1):
+        result = complete_json(system, current_prompt, model_cls, GENERATOR_MODEL)
         try:
             value = model_cls.model_validate(result.data)
             problems = check(value)
@@ -139,12 +142,11 @@ def generate(model_cls, system: str, prompt: str, check) -> tuple[BaseModel, LLM
             problems = [str(e)]
         if not problems:
             return value, result, retry
-        if retry == 1:
-            break
+        # A rejected answer must not come back from the cache next time.
+        forget(system, current_prompt, model_cls, GENERATOR_MODEL)
         feedback = "\n".join(f"- {p}" for p in problems)
-        retry_prompt = f"{prompt}\n\nYour previous answer had these problems. Fix them:\n{feedback}"
-        result = complete_json(system, retry_prompt, model_cls, GENERATOR_MODEL)
-    raise GenerationError("; ".join(problems))
+        current_prompt = f"{prompt}\n\nYour previous answer had these problems. Fix them:\n{feedback}"
+    raise GenerationError("; ".join(problems), result)
 
 
 async def log_run(conn, lesson_id, step: Step, status="ok", error=None) -> None:
@@ -167,17 +169,16 @@ async def log_run(conn, lesson_id, step: Step, status="ok", error=None) -> None:
 
 async def create_lesson(conn: psycopg.AsyncConnection, request: LessonRequest) -> dict:
     with tracer.start_as_current_span("create_lesson") as root:
-        root.set_attributes({"lesson.topic": request.topic, "lesson.level": request.level})
-        # Guardrails run before the request is stored, so a blocked one (which may contain
-        # personal data) never reaches the lessons table or the generator. Only the rule
-        # that blocked it is logged.
+        with step("retrieve") as retrieve:
+            chunks = await rerank_search(
+                conn, " ".join([request.topic, *request.objectives]), SOURCES_PER_LESSON
+            )
+        # Guardrails run before the request is stored or traced, so a blocked one (which may
+        # contain personal data) never reaches the lessons table, the generator or the trace
+        # backend. Only the rule that blocked it is logged.
         with step("guard") as guard:
             try:
                 check_text(request.topic, *request.objectives)
-                with step("retrieve") as retrieve:
-                    chunks = await rerank_search(
-                        conn, " ".join([request.topic, *request.objectives]), SOURCES_PER_LESSON
-                    )
                 check_scope(chunks[0]["score"] if chunks else float("-inf"))
                 guard.record(await asyncio.to_thread(moderate, request.topic, request.objectives))
             except Blocked as e:
@@ -185,6 +186,7 @@ async def create_lesson(conn: psycopg.AsyncConnection, request: LessonRequest) -
                 await log_run(conn, None, guard, status="blocked", error=e.rule)
                 await conn.commit()
                 raise
+        root.set_attributes({"lesson.topic": request.topic, "lesson.level": request.level})
 
         cur = await conn.execute(
             "INSERT INTO lessons (request, status) VALUES (%s, 'running') RETURNING id",
@@ -226,8 +228,16 @@ async def create_lesson(conn: psycopg.AsyncConnection, request: LessonRequest) -
                 shuffle_options(quiz)
                 current.record(result, retries)
             await log_run(conn, lesson_id, current)
-        except Exception as e:
-            await log_run(conn, lesson_id, current, status="error", error=str(e)[:500])
+        except BaseException as e:
+            # BaseException so cancellation (Ctrl+C, a container shutting down) doesn't leave
+            # the lesson "running" forever. Roll back first in case a statement failed.
+            await conn.rollback()
+            if isinstance(e, GenerationError) and current:
+                current.record(e.result, retries=1)
+            if current:
+                await log_run(
+                    conn, lesson_id, current, status="error", error=str(e)[:500] or type(e).__name__
+                )
             await conn.execute("UPDATE lessons SET status = 'failed' WHERE id = %s", [lesson_id])
             await conn.commit()
             raise

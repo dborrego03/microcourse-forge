@@ -35,6 +35,8 @@ export async function createLesson(_prev: FormState, form: FormData): Promise<Fo
 }
 
 export async function narrateLesson(lessonId: number): Promise<FormState> {
+  // Server actions can be called directly, so the bound id isn't trusted to be a number.
+  if (!Number.isSafeInteger(lessonId)) return { error: "Unknown lesson." };
   const res = await fetch(`${API_URL}/lessons/${lessonId}/audio`, { method: "POST" });
   if (!res.ok) {
     const body = await res.json().catch(() => null);

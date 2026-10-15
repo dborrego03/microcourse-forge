@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -11,6 +12,8 @@ from forge.llm import LLMError
 from forge.scorm import build_scorm12, package_name
 from forge.search import SEARCH_MODES
 from forge.tts import MEDIA_DIR, TTSError, narrate
+
+DAILY_REQUEST_LIMIT = int(os.environ.get("FORGE_DAILY_REQUEST_LIMIT", "50"))
 
 app = FastAPI(title="microcourse-forge")
 
@@ -34,6 +37,14 @@ async def search(
 async def new_lesson(request: LessonRequest):
     # Takes 20-40 s. Fine for a demo; a job queue comes when the deployment needs it.
     async with await connect() as conn:
+        # The endpoint is public and every request that passes the cheap checks costs a model
+        # call, so a daily ceiling keeps a scripted loop from running up the bill.
+        cur = await conn.execute(
+            """SELECT count(*) AS n FROM runs
+               WHERE step = 'guard' AND NOT cached AND created_at > now() - interval '1 day'"""
+        )
+        if (await cur.fetchone())["n"] >= DAILY_REQUEST_LIMIT:
+            raise HTTPException(429, "the daily limit for new lessons has been reached; try again tomorrow")
         try:
             return await create_lesson(conn, request)
         except Blocked as e:
@@ -49,7 +60,7 @@ async def list_lessons(limit: int = Query(20, ge=1, le=100)):
     async with await connect() as conn:
         cur = await conn.execute(
             """SELECT id, status, request->>'topic' AS topic, lesson->>'title' AS title, created_at
-               FROM lessons ORDER BY id DESC LIMIT %s""",
+               FROM lessons WHERE status = 'ready' ORDER BY id DESC LIMIT %s""",
             [limit],
         )
         return await cur.fetchall()

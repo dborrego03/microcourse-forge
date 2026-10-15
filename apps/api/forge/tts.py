@@ -57,6 +57,7 @@ def synthesize(text: str, client: httpx.Client | None = None) -> bytes:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise TTSError("OPENAI_API_KEY is not set, so narration is turned off")
+    owned = client is None
     client = client or httpx.Client(timeout=60)
     body = {
         "model": TTS_MODEL,
@@ -65,15 +66,21 @@ def synthesize(text: str, client: httpx.Client | None = None) -> bytes:
         "response_format": "mp3",
         "instructions": "A calm, clear teacher explaining a topic to adult learners.",
     }
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        res = client.post(API_URL, json=body, headers={"Authorization": f"Bearer {api_key}"})
-        if res.status_code == 200:
-            CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(res.content)
-            return res.content
-        if res.status_code not in (429, 500, 502, 503) or attempt == MAX_ATTEMPTS:
-            raise TTSError(f"TTS request failed with {res.status_code}: {res.text[:200]}")
-        time.sleep(2**attempt)
+    try:
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            res = client.post(API_URL, json=body, headers={"Authorization": f"Bearer {api_key}"})
+            if res.status_code == 200:
+                CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(res.content)
+                return res.content
+            if res.status_code not in (429, 500, 502, 503) or attempt == MAX_ATTEMPTS:
+                raise TTSError(f"TTS request failed with {res.status_code}: {res.text[:200]}")
+            time.sleep(2**attempt)
+    except httpx.HTTPError as e:
+        raise TTSError(f"can't reach the TTS API: {e}") from e
+    finally:
+        if owned:
+            client.close()
     raise AssertionError("unreachable")
 
 
@@ -99,10 +106,17 @@ def to_vtt(text: str, seconds: float) -> str:
 
 async def narrate(conn: psycopg.AsyncConnection, lesson: dict) -> list[dict]:
     """`lesson` is a ready row from forge.lessons.get_lesson. Writes files and audio_assets rows."""
+    # One narration per lesson at a time: a second request waits on this lock and then
+    # gets the audio the first one made, instead of paying for it again.
+    await conn.execute("SELECT id FROM lessons WHERE id = %s FOR UPDATE", [lesson["id"]])
+    cur = await conn.execute("SELECT * FROM audio_assets WHERE lesson_id = %s ORDER BY part", [lesson["id"]])
+    if existing := await cur.fetchall():
+        await conn.commit()
+        return existing
+
     folder = MEDIA_DIR / f"lesson-{lesson['id']}"
     folder.mkdir(parents=True, exist_ok=True)
     per_minute = os.environ.get("FORGE_TTS_USD_PER_MINUTE")  # no default: prices change, so it's configured
-    await conn.execute("DELETE FROM audio_assets WHERE lesson_id = %s", [lesson["id"]])
     for part, script in enumerate(section_scripts(lesson["lesson"]), 1):
         audio = await asyncio.to_thread(synthesize, script)
         seconds = duration_s(audio)

@@ -141,7 +141,7 @@ async def eval_generation(dataset: str = "generation_v1") -> dict:
             try:
                 lesson = await create_lesson(conn, request)
                 review, _ = await asyncio.to_thread(review_lesson, lesson)
-            except (GenerationError, LLMError) as e:
+            except (Blocked, GenerationError, LLMError) as e:
                 rows.append({"id": case["id"], "status": "failed", "error": str(e)[:300]})
                 continue
             cur = await conn.execute(
