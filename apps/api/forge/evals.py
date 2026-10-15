@@ -23,7 +23,7 @@ from psycopg.types.json import Jsonb
 from forge.db import connect, run
 from forge.guardrails import Blocked, check_scope, check_text, moderate
 from forge.judge import CRITERIA, JUDGE_MODEL, review_lesson
-from forge.lessons import GENERATOR_MODEL, GenerationError, LessonRequest, create_lesson
+from forge.lessons import GENERATOR_MODEL, GenerationError, LessonRequest, create_lesson, load_prompt
 from forge.llm import LLMError
 from forge.search import SEARCH_MODES, rerank_search
 from forge.version import git_sha
@@ -173,7 +173,11 @@ async def eval_generation(dataset: str = "generation_v1") -> dict:
             "kind": "generation",
             "dataset": dataset,
             "cases": len(cases),
-            "config": {"generator": GENERATOR_MODEL, "judge": JUDGE_MODEL},
+            "config": {
+                "generator": GENERATOR_MODEL,
+                "judge": JUDGE_MODEL,
+                "prompts": {name: load_prompt(name)[1] for name in ("lesson", "quiz", "judge")},
+            },
             "metrics": generation_metrics(rows),
             "git_sha": git_sha(),
             "lessons": rows,

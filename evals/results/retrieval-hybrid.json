@@ -11,11 +11,11 @@
     "hit@5": 0.96,
     "hit@10": 0.98,
     "mrr@10": 0.764,
-    "latency_p50_ms": 15.8,
-    "latency_p95_ms": 43.1
+    "latency_p50_ms": 16.1,
+    "latency_p95_ms": 48.2
   },
   "misses": [
     "r50"
   ],
-  "git_sha": "da7e7c5-dirty"
+  "git_sha": "746d34d"
 }
