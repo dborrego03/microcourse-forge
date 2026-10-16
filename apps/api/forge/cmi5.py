@@ -82,21 +82,36 @@ function duration() {
   return "PT" + Math.round((Date.now() - started) / 1000) + "S";
 }
 
+// Statements go out one at a time, in the order they were queued, so "terminated" can't
+// overtake the result of the attempt.
+var queue = Promise.resolve();
+function enqueue(verb, result, moveOn) {
+  queue = queue.then(function () { return send(verb, result, moveOn); }).catch(function () {});
+  return queue;
+}
+
 var launched = (async function () {
   var q = new URLSearchParams(location.search);
   if (!q.get("endpoint") || !q.get("fetch")) {
     document.getElementById("standalone").hidden = false;
     return;
   }
-  var auth = await (await fetch(q.get("fetch"), { method: "POST" })).json();
+  // The fetch URL can only be used once; keep the token so reloading the page still reports.
+  var key = "cmi5-token:" + q.get("registration"), token = null;
+  try { token = sessionStorage.getItem(key); } catch (e) {}
+  if (!token) {
+    token = (await (await fetch(q.get("fetch"), { method: "POST" })).json())["auth-token"];
+    try { sessionStorage.setItem(key, token); } catch (e) {}
+  }
   lrs = {
     endpoint: q.get("endpoint").replace(/\\/?$/, "/"),
-    token: auth["auth-token"],
+    token: token,
     actor: JSON.parse(q.get("actor")),
     registration: q.get("registration"),
     activityId: q.get("activityId"),
     context: {},
     masteryScore: null,
+    launchMode: "Normal",
   };
   var state = new URLSearchParams({
     stateId: "LMS.LaunchData", activityId: lrs.activityId,
@@ -105,26 +120,30 @@ var launched = (async function () {
   var res = await fetch(lrs.endpoint + "activities/state?" + state, { headers: headers() });
   var launchData = await res.json();
   lrs.context = launchData.contextTemplate || {};
+  lrs.launchMode = launchData.launchMode || "Normal";
   // The LMS's mastery score wins over the one in the course structure.
   if (typeof launchData.masteryScore === "number") {
     lrs.masteryScore = launchData.masteryScore;
     MASTERY = Math.round(launchData.masteryScore * 100);
   }
-  await send("initialized");
+  await enqueue("initialized");
 })();
 
+// shortcut: a relaunch in the same registration reports the new attempt again; storing a
+// flag with the State API would stop that, once a real LMS shows it matters.
 function report(score) {
-  launched.then(async function () {
-    if (!lrs) return;
+  launched.then(function () {
+    // Browse and Review launches look at the content; only Normal ones record results.
+    if (!lrs || lrs.launchMode !== "Normal") return;
     var passed = score >= MASTERY;
-    await send(passed ? "passed" : "failed",
+    enqueue(passed ? "passed" : "failed",
       { score: { scaled: score / 100 }, success: passed, duration: duration() }, true);
-    await send("completed", { completion: true, duration: duration() }, true);
+    enqueue("completed", { completion: true, duration: duration() }, true);
   });
 }
 
 window.addEventListener("pagehide", function () {
-  if (lrs) send("terminated", { duration: duration() });
+  if (lrs) enqueue("terminated", { duration: duration() });
 });
 """
 

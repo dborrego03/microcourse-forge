@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 
 type Statement = {
@@ -7,8 +7,10 @@ type Statement = {
   context: { registration: string; contextActivities: { category: { id: string }[] } };
 };
 
+const REGISTRATION = "11111111-2222-4333-8444-555555555555";
+
 // Plays both the LMS and the LRS: serves the AU, hands out a token and records statements.
-test("the cmi5 package launches and sends the cmi5 statements", async ({ page, request }) => {
+async function launch(page: Page, request: APIRequestContext, launchMode = "Normal") {
   const recent = await (await request.get("http://127.0.0.1:8000/lessons?limit=20")).json();
   const ready = recent.find((l: { status: string }) => l.status === "ready");
   test.skip(!ready, "needs at least one ready lesson");
@@ -19,12 +21,18 @@ test("the cmi5 package launches and sends the cmi5 statements", async ({ page, r
   expect(Object.keys(files).sort()).toEqual(["LICENSE.txt", "cmi5.xml", "index.html"]);
 
   const statements: Statement[] = [];
+  const tokenRequests: string[] = [];
   await page.route("http://lms.test/au/index.html*", (route) =>
     route.fulfill({ contentType: "text/html", body: strFromU8(files["index.html"]) }),
   );
-  await page.route("http://lms.test/token", (route) => route.fulfill({ json: { "auth-token": "dGVzdA==" } }));
+  await page.route("http://lms.test/token", (route) => {
+    tokenRequests.push(route.request().method());
+    return route.fulfill({ json: { "auth-token": "dGVzdA==" } });
+  });
   await page.route("http://lrs.test/xapi/activities/state*", (route) =>
-    route.fulfill({ json: { contextTemplate: { extensions: { session: "s1" } }, masteryScore: 0.5 } }),
+    route.fulfill({
+      json: { contextTemplate: { extensions: { session: "s1" } }, masteryScore: 0.5, launchMode },
+    }),
   );
   await page.route("http://lrs.test/xapi/statements", (route) => {
     expect(route.request().headers()["x-experience-api-version"]).toBe("1.0.3");
@@ -32,25 +40,34 @@ test("the cmi5 package launches and sends the cmi5 statements", async ({ page, r
     return route.fulfill({ json: ["ok"] });
   });
 
-  const launch = new URLSearchParams({
+  const query = new URLSearchParams({
     endpoint: "http://lrs.test/xapi",
     fetch: "http://lms.test/token",
     actor: JSON.stringify({
       objectType: "Agent",
       account: { homePage: "http://lms.test", name: "learner-1" },
     }),
-    registration: "11111111-2222-4333-8444-555555555555",
+    registration: REGISTRATION,
     activityId: "https://github.com/dborrego03/microcourse-forge/lessons/1/au",
   });
-  await page.goto(`http://lms.test/au/index.html?${launch}`);
+  await page.goto(`http://lms.test/au/index.html?${query}`);
   await expect.poll(() => statements.length).toBe(1);
-  await expect(page.getByText("Preview mode")).toBeHidden();
+  return { statements, tokenRequests };
+}
 
+async function answerAndCheck(page: Page) {
   for (const group of await page.locator("fieldset").all()) {
     const radio = group.getByRole("radio").first();
     if (await radio.count()) await radio.check();
   }
   await page.getByRole("button", { name: "Check answers" }).click();
+}
+
+test("the cmi5 package launches and sends the cmi5 statements", async ({ page, request }) => {
+  const { statements } = await launch(page, request);
+  await expect(page.getByText("Preview mode")).toBeHidden();
+
+  await answerAndCheck(page);
   await expect.poll(() => statements.length).toBe(3);
 
   const verbs = statements.map((s) => s.verb.id.split("/").pop());
@@ -60,9 +77,24 @@ test("the cmi5 package launches and sends the cmi5 statements", async ({ page, r
   expect(statements[1].result?.success).toBe(verbs[1] === "passed");
   expect(statements[2].result?.completion).toBe(true);
   for (const s of statements) {
-    expect(s.context.registration).toBe("11111111-2222-4333-8444-555555555555");
+    expect(s.context.registration).toBe(REGISTRATION);
     expect(s.context.contextActivities.category).toContainEqual({
       id: "https://w3id.org/xapi/cmi5/context/categories/cmi5",
     });
   }
+});
+
+test("a Browse launch records no results", async ({ page, request }) => {
+  const { statements } = await launch(page, request, "Browse");
+  await answerAndCheck(page);
+  await expect(page.getByRole("status")).toContainText(/\d+ of \d+ correct/);
+  await page.waitForTimeout(500);
+  expect(statements.map((s) => s.verb.id.split("/").pop())).toEqual(["initialized"]);
+});
+
+test("a reload reuses the token instead of the one-time fetch URL", async ({ page, request }) => {
+  const { statements, tokenRequests } = await launch(page, request);
+  await page.reload();
+  await expect.poll(() => statements.length).toBe(2);
+  expect(tokenRequests).toHaveLength(1);
 });

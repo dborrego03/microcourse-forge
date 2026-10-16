@@ -44,7 +44,6 @@ MANIFEST = """<?xml version="1.0" encoding="UTF-8"?>
 
 # Grading is the same for every package type; each runtime defines report(score).
 QUIZ_JS = """
-var reported = false;
 document.getElementById("check").addEventListener("click", function () {
   var graded = 0, correct = 0;
   QUIZ.forEach(function (q, i) {
@@ -86,14 +85,26 @@ function findAPI(win) {
 api = findAPI(window) || (window.opener ? findAPI(window.opener) : null);
 if (api) {
   api.LMSInitialize("");
-  if (api.LMSGetValue("cmi.core.lesson_status") === "not attempted") {
+  var status = api.LMSGetValue("cmi.core.lesson_status");
+  if (status === "not attempted") {
     api.LMSSetValue("cmi.core.lesson_status", "incomplete");
     api.LMSCommit("");
   }
+  // A relaunch after a graded attempt must not overwrite passed with failed.
+  if (status === "passed" || status === "failed") reported = true;
 } else {
   document.getElementById("standalone").hidden = false;
 }
-window.addEventListener("beforeunload", function () { if (api) api.LMSFinish(""); });
+var finished = false;
+function finish() {
+  if (api && !finished) {
+    finished = true;
+    api.LMSFinish("");
+  }
+}
+// beforeunload doesn't fire when the LMS removes the frame; pagehide does.
+window.addEventListener("beforeunload", finish);
+window.addEventListener("pagehide", finish);
 
 function report(score) {
   if (!api) return;
@@ -174,14 +185,17 @@ def render_html(lesson: dict, narrated: bool = False, runtime: str = SCORM_JS) -
         "the same license. It can contain mistakes: check the cited passages.</small></p>"
     )
 
-    # Escape "</" so lesson text can't close the script tag early.
-    quiz_json = json.dumps(quiz).replace("</", "<\\/")
+    # Every "<" escaped, so model text can't end the script early (</script>) or open a
+    # comment (<!--) that keeps the browser from ever closing it.
+    quiz_json = json.dumps(quiz).replace("<", "\\u003c")
+    # `reported` is declared first so a runtime can mark an attempt as already graded.
     return (
         '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{escape(body['title'])}</title><style>{STYLE}</style></head><body>"
         + "\n".join(parts)
-        + f"<script>var QUIZ = {quiz_json}; var MASTERY = {MASTERY_SCORE};{runtime}{QUIZ_JS}</script>"
+        + f"<script>var QUIZ = {quiz_json}; var MASTERY = {MASTERY_SCORE}; var reported = false;"
+        + f"{runtime}{QUIZ_JS}</script>"
         + "</body></html>\n"
     )
 
