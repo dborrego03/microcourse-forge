@@ -36,6 +36,15 @@ az containerapp job start -n "$(terraform output -raw ingest_job)" -g "$(terrafo
 The images come from GHCR, so the packages `microcourse-forge-api` and `microcourse-forge-web`
 must be public (GitHub > Packages > settings), or the container apps can't pull them.
 
+## Deploying from GitHub Actions
+
+The Release workflow logs in with OIDC, so no Azure secret is stored in GitHub. In Azure, create an
+app registration with a federated credential whose subject is the `production` environment
+(`repo:dborrego03/microcourse-forge:environment:production`), so only the approved deploy job can
+use it. Then set these repository variables: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`,
+`AZURE_SUBSCRIPTION_ID`, `TFSTATE_RESOURCE_GROUP`, `TFSTATE_STORAGE_ACCOUNT`, `ALERT_EMAIL`,
+`BUDGET_START_DATE`; and, optionally, the secrets `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`.
+
 ## Tear down
 
 ```
@@ -52,5 +61,7 @@ The bootstrap storage stays; delete its resource group by hand if you are done f
   simpler for a demo; a VNet with private endpoints is the step up.
 - Without `anthropic_api_key` the deployed app serves the lessons already in the database and can't
   generate new ones (see `docs/adr/0002-llm-provider.md`).
+- Set hard monthly limits in the Anthropic and OpenAI consoles too: the Azure budget doesn't see
+  that spend. The API also stops at 50 new lessons a day (`FORGE_DAILY_REQUEST_LIMIT`).
 - The API runs `alembic upgrade head` before starting. That is safe because it never runs more
   than one replica.

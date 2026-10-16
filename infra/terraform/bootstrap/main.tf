@@ -12,6 +12,8 @@ terraform {
 
 provider "azurerm" {
   features {}
+  # The account below has shared keys turned off, so data-plane calls use Azure AD.
+  storage_use_azuread = true
 }
 
 variable "location" {
@@ -39,6 +41,7 @@ resource "azurerm_storage_account" "state" {
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
+  shared_access_key_enabled       = false
   # The state holds secrets (database password, storage key), so keep old versions
   # recoverable and never expose the container publicly.
   blob_properties {
