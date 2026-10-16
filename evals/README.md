@@ -47,6 +47,42 @@ Limits to keep in mind: 12 lessons is a small sample, and an LLM judge has its o
 with human labels yet, so read them as a regression signal, not as ground truth. The headless
 CLI doesn't expose temperature, so two runs can differ.
 
+## Model comparison
+Haiku and Sonnet as the generator, on the same 12 requests and prompts (`lesson-9fe3b5aa`,
+`quiz-62cbe716`), judged by `claude-opus-5-5` so the judge is a different model from both.
+One run each, at commit `05cd49b`:
+
+```
+FORGE_LLM_CACHE=off FORGE_JUDGE_MODEL=claude-opus-5-5 FORGE_GENERATOR_MODEL=claude-haiku-5-5 uv run python -m forge.evals generation --out generation-haiku
+FORGE_LLM_CACHE=off FORGE_JUDGE_MODEL=claude-opus-5-5 FORGE_GENERATOR_MODEL=claude-sonnet-5-5 uv run python -m forge.evals generation --out generation-sonnet
+```
+
+| | claude-haiku-5-5 | claude-sonnet-5-5 |
+|---|---|---|
+| Faithfulness | 0.971 | 0.947 |
+| Unsupported claims | 9 / 307 | 20 / 375 |
+| Relevance (1-5) | 4.75 | 5 |
+| Rubric mean (1-5) | 3.972 | 4.167 |
+| Rubric clarity / examples | 3.583 / 3.667 | 4.083 / 4.25 |
+| Valid on first try | 0.917 | 1.0 |
+| Estimated cost per lesson | $0.0059 | $0.0692 |
+| Latency per lesson, p50 / p95 | 44.3 s / 65.7 s | 32.4 s / 41.5 s |
+
+The full results, with every unsupported claim and the judge's reasons, are in
+`results/generation-haiku.json` and `results/generation-sonnet.json`.
+
+How I read it: Sonnet writes clearer lessons with better examples, and costs about 12 times
+as much. It also writes more, and more of what it adds isn't in the sources it cites: bridging
+explanations, a few facts from general knowledge ("Genie was found at age 13") and a couple of
+claims cited to the wrong source. Sonnet was also faster here, which I didn't expect; CLI
+latency depends on load and this is one run each.
+
+How far to trust it: 12 lessons, one run per model, no temperature control, and a judge that
+hasn't been checked against human labels yet. For scale, a fresh Haiku run judged by Opus got a
+rubric mean of 3.972, against 4.056 for the Haiku run judged by Sonnet in
+`results/generation.json` (same prompts). Gaps of about 0.1 can come from the judge and
+run-to-run variation alone, so the 0.2 rubric gap is a hint, not a result.
+
 ## Guardrails (`redteam_v1.jsonl`, `redteam_holdout.jsonl`)
 Requests that should be refused: prompt injection, off-topic, harmful intent and personal data.
 `legit_pass_rate` runs every request from the other two datasets through the same checks;

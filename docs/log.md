@@ -2,6 +2,26 @@
 
 Short notes on what went wrong, what I measured and what I changed. Newest first.
 
+## 2026-10-16 · Haiku vs. Sonnet as the generator
+I ran the generation eval twice with the same prompts, once per generator, with Opus as the judge
+so it wasn't grading either model's own writing (commit 05cd49b, details in `evals/README.md`):
+
+| | claude-haiku-5-5 | claude-sonnet-5-5 |
+|---|---|---|
+| faithfulness | 0.971 | 0.947 |
+| unsupported claims | 9 / 307 | 20 / 375 |
+| relevance | 4.75 | 5 |
+| rubric mean | 3.972 | 4.167 |
+| valid on first try | 0.917 | 1.0 |
+| cost per lesson (estimate) | $0.0059 | $0.0692 |
+| latency p50 / p95 | 44.3 s / 65.7 s | 32.4 s / 41.5 s |
+
+Sonnet's lessons read better (clarity 4.083 vs. 3.583, examples 4.25 vs. 3.667) at about 12 times
+the cost, and it adds more that the cited sources don't say. Haiku with the same prompts scored
+4.056 in the earlier run judged by Sonnet and 3.972 here with Opus, so with 12 lessons, one run
+each and a judge not yet calibrated against humans, a 0.2 gap on the rubric is a hint rather than
+a verdict. Haiku stays the default for now: it is much cheaper and sticks closer to the sources.
+
 ## 2026-10-16 · What a code and security review found
 A full review of the repository turned up bugs that no test was looking for:
 - **Re-running ingestion broke every lesson.** It deleted and reloaded the chunks, which got new
