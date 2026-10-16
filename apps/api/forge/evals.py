@@ -1,7 +1,7 @@
 """Offline evaluations.
 
     uv run python -m forge.evals retrieval [--mode vector|hybrid|rerank] [--check]
-    uv run python -m forge.evals generation [--check]
+    uv run python -m forge.evals generation [--check] [--out generation-haiku]
     uv run python -m forge.evals guardrails [--check]
 
 Results go to evals/results/ and to the eval_runs table, so every number in
@@ -246,6 +246,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=list(SEARCH_MODES), default="vector", help="retrieval only")
     parser.add_argument("--dataset", default="redteam_v1", help="guardrails only")
     parser.add_argument("--check", action="store_true", help="exit 1 if a metric is below its threshold")
+    parser.add_argument("--out", help="name of the results file (default: the kind and mode)")
     args = parser.parse_args()
 
     if args.kind == "retrieval":
@@ -257,6 +258,7 @@ def main() -> None:
     else:
         report = run(eval_guardrails(args.dataset))
         name = f"guardrails-{args.dataset}"
+    name = args.out or name
     out = EVALS_DIR / "results" / f"{name}.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
