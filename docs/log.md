@@ -2,6 +2,25 @@
 
 Short notes on what went wrong, what I measured and what I changed. Newest first.
 
+## 2026-10-16 · What a code and security review found
+A full review of the repository turned up bugs that no test was looking for:
+- **Re-running ingestion broke every lesson.** It deleted and reloaded the chunks, which got new
+  ids, while lessons cite chunks by id. Ingestion now skips a copy that's already loaded.
+- **The cache kept bad answers.** A response that failed validation was cached before it was
+  checked, so the same request failed forever without calling the model again.
+- **Production couldn't retry.** The API provider let the SDK validate the JSON, which turned a
+  fixable answer into a 503 before my retry-with-feedback could run. It now returns raw JSON like
+  the CLI path, and both share the same validation.
+- **Interrupted lessons stayed "running"**, because only `Exception` was caught, not cancellation.
+- **Anyone could run up the bill.** The public endpoints had no ceiling, and narration could be
+  bought twice by sending the same request in parallel. There is now a daily limit, a row lock on
+  narration and reuse of existing audio.
+- **CI and deploy permissions were broader than needed**: the Azure token was available to the
+  image-build job, the Claude token to every step of the nightly evals, and actions were pinned by
+  tag. All of that is now per-job, per-step and pinned by commit.
+
+Lesson: tests check what I thought of; a review with fresh eyes checks what I didn't.
+
 ## 2026-10-15 · The lesson prompt was fighting itself
 The first generation eval (12 lessons) gave faithfulness 0.90: 30 of 309 claims weren't backed by
 the sources each section cited. Reading them, most were textbook-style definitions and bridging
